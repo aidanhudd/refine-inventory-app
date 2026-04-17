@@ -5,7 +5,7 @@ This version adds:
 - quantity type dropdown from Supabase
 - quantity, SKU, location, notes, status
 - search and filters
-- inventory stats
+- inventory stats.
 
 ## Before deploying
 Make sure your Supabase tables have data:
