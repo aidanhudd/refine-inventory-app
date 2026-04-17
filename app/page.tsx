@@ -558,27 +558,6 @@ export default function Home() {
                       <button className="btn-danger btn-small" onClick={() => deleteItem(item.id)}>Delete</button>
                       {activeImage && (
   <div
-    onClick={() => setActiveImage(null)}
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100vw",
-      height: "100vh",
-      background: "rgba(0,0,0,0.85)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 9999,
-      cursor: "pointer",
-    }}
-  >
-    <img
-      src={activeImage}
-      style={{
-        maxWidth: "90%",
-        maxHeight: "90%",
-        borderRadius: "12px",
       }}
     />
   </div>
