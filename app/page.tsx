@@ -541,10 +541,11 @@ export default function Home() {
                       </div>
 
                       {photos.length > 0 && (
-                        <div className="photo-grid">
-                          {photos.slice(0, 6).map((url) => (
-                            <div key={url} className="photo-box">
-                              <img src={url} alt="Inventory item" />
+                       {photos.slice(0, 6).map((url) => (
+  <div key={url} className="photo-box" onClick={() => setActiveImage(url)} style={{ cursor: "pointer" }}>
+    <img src={url} alt="Inventory item" />
+  </div>
+))}
                             </div>
                           ))}
                         </div>
@@ -555,6 +556,33 @@ export default function Home() {
                       <button className="btn-edit btn-small" onClick={() => startEdit(item)}>Edit</button>
                       <button className="btn-secondary btn-small" onClick={() => markSold(item.id)}>Mark Sold</button>
                       <button className="btn-danger btn-small" onClick={() => deleteItem(item.id)}>Delete</button>
+                      {activeImage && (
+  <div
+    onClick={() => setActiveImage(null)}
+    style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      background: "rgba(0,0,0,0.85)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 9999,
+      cursor: "pointer",
+    }}
+  >
+    <img
+      src={activeImage}
+      style={{
+        maxWidth: "90%",
+        maxHeight: "90%",
+        borderRadius: "12px",
+      }}
+    />
+  </div>
+)}
                     </div>
                   </div>
                 )
