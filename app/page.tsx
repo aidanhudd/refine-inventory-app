@@ -1,7 +1,8 @@
 "use client"
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react"
-import { supabase } from "../lib/supabaseClient"
+const [activeImage, setActiveImage] = useState<string | null>(null)
+  import { supabase } from "../lib/supabaseClient"
 
 type Category = {
   id: string
