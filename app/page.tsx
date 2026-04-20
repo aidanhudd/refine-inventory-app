@@ -550,8 +550,9 @@ export default function Home() {
   {photos.length > 0 && (
     <div className="photo-grid">
       {photos.slice(0, 6).map((url) => {
-        const filePath = url.split("/inventory-photos/")[1]
-
+        const filePath = url.split("/object/inventory-photos/")[1]
+      console.log("Deleting:", filePath)
+      
         return (
           <div
             key={url}
