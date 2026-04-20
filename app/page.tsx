@@ -67,6 +67,7 @@ export default function Home() {
   const loadAll = async () => {
     setLoading(true)
     setErrorMessage("")
+    await loadUsage()
 
     const [itemsRes, categoriesRes, quantityTypesRes] = await Promise.all([
       supabase.from("inventory_items").select("*").order("created_at", { ascending: false }),
