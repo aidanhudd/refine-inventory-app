@@ -344,13 +344,6 @@ const markSold = async (id: string) => {
   setMessage("Item marked as sold.")
   await loadAll()
 }
-
-    if (editingId === id) {
-      setForm((prev) => ({ ...prev, status: "sold", quantity_on_hand: "0" }))
-    }
-
-    setMessage("Item marked as sold.")
-    await loadAll()
   }
 
   const uploadMorePhotos = async (itemId: string, e: ChangeEvent<HTMLInputElement>) => {
