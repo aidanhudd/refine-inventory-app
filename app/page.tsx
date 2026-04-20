@@ -637,34 +637,47 @@ const markSold = async (id: string) => {
   <div className="section-gap">
     <strong>Usage History</strong>
 
-    {usageMap[item.id].slice(0, 5).map((u) => (
-      <div key={u.id} style={{ fontSize: "13px", marginTop: "4px", display: "flex", justifyContent: "space-between" }}>
-  <span>
-    • {u.job_name} — {u.quantity_used} {item.quantity_type} —{" "}
-    {new Date(u.used_at).toLocaleDateString()}
-  </span>
+    {usageMap[item.id].slice(0, 5).map((u) => {
+      return (
+        <div
+          key={u.id}
+          style={{
+            fontSize: "13px",
+            marginTop: "4px",
+            display: "flex",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>
+            • {u.job_name} — {u.quantity_used} {item.quantity_type} —{" "}
+            {new Date(u.used_at).toLocaleDateString()}
+          </span>
 
-  <button
-    onClick={() => {
-      const confirmed = confirm("Undo this usage?")
-      if (!confirmed) return
+          <button
+            onClick={() => {
+              const confirmed = confirm("Undo this usage?")
+              if (!confirmed) return
 
-      undoUsage(u.id, item.id, u.quantity_used)
-    }}
-    style={{
-      marginLeft: "8px",
-      background: "red",
-      color: "white",
-      border: "none",
-      borderRadius: "4px",
-      cursor: "pointer",
-      fontSize: "11px",
-      padding: "2px 6px",
-    }}
-  >
-    Undo
-  </button>
-</div>
+              undoUsage(u.id, item.id, u.quantity_used)
+            }}
+            style={{
+              marginLeft: "8px",
+              background: "red",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "11px",
+              padding: "2px 6px",
+            }}
+          >
+            Undo
+          </button>
+        </div>
+      )
+    })}
+  </div>
+)}
     
                     <div className="section-gap">
   <label>Add More Photos</label>
