@@ -294,8 +294,32 @@ export default function Home() {
     setMessage("Item deleted.")
     await loadAll()
   }
+  
+const useInventory = async (itemId: string, qty: number, jobName: string) => {
+  // 1. log usage
+  await supabase.from("inventory_usage").insert([
+    {
+      item_id: itemId,
+      job_name: jobName,
+      quantity_used: qty,
+    },
+  ])
 
-  const markSold = async (id: string) => {
+  // 2. subtract from inventory
+  const item = items.find(i => i.id === itemId)
+
+  if (!item) return
+
+  const newQty = Number(item.quantity_on_hand || 0) - qty
+
+  await supabase
+    .from("inventory_items")
+    .update({ quantity_on_hand: newQty })
+    .eq("id", itemId)
+
+  await loadAll()
+  
+}  const markSold = async (id: string) => {
     setErrorMessage("")
     setMessage("")
 
