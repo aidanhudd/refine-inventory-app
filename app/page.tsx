@@ -57,6 +57,7 @@ export default function Home() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([])
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null)
   const [photoMap, setPhotoMap] = useState<PhotoMap>({})
+  const [activeImage, setActiveImage] = useState<string | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -100,7 +101,9 @@ export default function Home() {
       })
       if (!error && data) {
         nextMap[item.id] = data.map((file) => {
-          const { data: publicUrlData } = supabase.storage.from("inventory-photos").getPublicUrl(`${item.id}/${file.name}`)
+          const { data: publicUrlData } = supabase.storage
+            .from("inventory-photos")
+            .getPublicUrl(`${item.id}/${file.name}`)
           return publicUrlData.publicUrl
         })
       }
@@ -296,7 +299,11 @@ export default function Home() {
     setErrorMessage("")
     setMessage("")
 
-    const { error } = await supabase.from("inventory_items").update({ status: "sold", quantity_on_hand: 0 }).eq("id", id)
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({ status: "sold", quantity_on_hand: 0 })
+      .eq("id", id)
+
     if (error) {
       setErrorMessage(error.message)
       return
@@ -335,7 +342,7 @@ export default function Home() {
           <div className="eyebrow">Refine Kitchen & Bath</div>
           <h1>Warehouse Inventory</h1>
           <p className="subtext">
-            Now with edit, sold, delete, and photo upload support.
+            Now with edit, sold, delete, photo upload support, and fullscreen image preview.
           </p>
         </div>
       </div>
@@ -543,7 +550,12 @@ export default function Home() {
                       {photos.length > 0 && (
                         <div className="photo-grid">
                           {photos.slice(0, 6).map((url) => (
-                            <div key={url} className="photo-box">
+                            <div
+                              key={url}
+                              className="photo-box"
+                              onClick={() => setActiveImage(url)}
+                              style={{ cursor: "pointer" }}
+                            >
                               <img src={url} alt="Inventory item" />
                             </div>
                           ))}
@@ -563,6 +575,36 @@ export default function Home() {
           )}
         </section>
       </div>
+
+      {activeImage && (
+        <div
+          onClick={() => setActiveImage(null)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.9)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            cursor: "pointer",
+            padding: "24px",
+          }}
+        >
+          <img
+            src={activeImage}
+            alt="Full size inventory"
+            style={{
+              maxWidth: "95%",
+              maxHeight: "95%",
+              borderRadius: "12px",
+            }}
+          />
+        </div>
+      )}
     </main>
   )
 }
