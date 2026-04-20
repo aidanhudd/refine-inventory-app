@@ -3,6 +3,10 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
 
+<a href="/jobs">
+  <button className="btn-secondary">View Job Usage</button>
+</a>
+
 type Category = {
   id: string
   name: string
