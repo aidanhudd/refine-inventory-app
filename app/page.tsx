@@ -2,10 +2,11 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
+import Link from "next/link"
 
-<a href="/jobs">
+<Link href="/jobs">
   <button className="btn-secondary">View Job Usage</button>
-</a>
+</Link>
 
 type Category = {
   id: string
