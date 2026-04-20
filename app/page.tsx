@@ -69,7 +69,10 @@ export default function Home() {
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null)
   const [photoMap, setPhotoMap] = useState<PhotoMap>({})
   const [activeImage, setActiveImage] = useState<string | null>(null)
-
+  const [useModalOpen, setUseModalOpen] = useState(false)
+const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
+const [useQty, setUseQty] = useState("")
+const [useJob, setUseJob] = useState("")
   useEffect(() => {
     loadAll()
   }, [])
