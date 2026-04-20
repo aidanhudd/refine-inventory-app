@@ -545,10 +545,9 @@ export default function Home() {
                       <input type="file" multiple accept="image/*" onChange={(e) => uploadMorePhotos(item.id, e)} />
                       <div className="small">
                         {uploadingItemId === item.id ? "Uploading..." : photos.length ? `${photos.length} photo(s)` : "No photos yet."}
-                      </div>
-
-                      {photos.length > 0 && (
-                        <<div className="photo-grid">
+                      </div>  {photos.length > 0 && (
+                        
+    <<div className="photo-grid">
   {photos.slice(0, 6).map((url) => {
     const filePath = url.split("/inventory-photos/")[1]
 
