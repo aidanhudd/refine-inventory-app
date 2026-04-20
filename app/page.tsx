@@ -319,18 +319,27 @@ const useInventory = async (itemId: string, qty: number, jobName: string) => {
 
   await loadAll()
   
-}  const markSold = async (id: string) => {
-    setErrorMessage("")
-    setMessage("")
+} const markSold = async (id: string) => {
+  setErrorMessage("")
+  setMessage("")
 
-    const { error } = await supabase
-      .from("inventory_items")
-      .update({ status: "sold", quantity_on_hand: 0 })
-      .eq("id", id)
+  const { error } = await supabase
+    .from("inventory_items")
+    .update({ status: "sold", quantity_on_hand: 0 })
+    .eq("id", id)
 
-    if (error) {
-      setErrorMessage(error.message)
-      return
+  if (error) {
+    setErrorMessage(error.message)
+    return
+  }
+
+  if (editingId === id) {
+    setForm((prev) => ({ ...prev, status: "sold", quantity_on_hand: "0" }))
+  }
+
+  setMessage("Item marked as sold.")
+  await loadAll()
+}
     }
 
     if (editingId === id) {
