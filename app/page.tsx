@@ -606,6 +606,7 @@ export default function Home() {
     )
   })}
 </div>
+)}
 
                     <div className="action-row">
                       <button className="btn-edit btn-small" onClick={() => startEdit(item)}>Edit</button>
