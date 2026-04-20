@@ -593,7 +593,19 @@ const markSold = async (id: string) => {
                       <div><strong>Created:</strong> {item.created_at ? new Date(item.created_at).toLocaleDateString() : "—"}</div>
                       <div><strong>Notes:</strong> {item.notes || "—"}</div>
                     </div>
+                    
+                    {usageMap[item.id]?.length > 0 && (
+  <div className="section-gap">
+    <strong>Usage History</strong>
 
+    {usageMap[item.id].slice(0, 5).map((u) => (
+      <div key={u.id} style={{ fontSize: "13px", marginTop: "4px" }}>
+        • {u.job_name} — {u.quantity_used} {item.quantity_type} —{" "}
+        {new Date(u.used_at).toLocaleDateString()}
+      </div>
+    ))}
+  </div>
+)}
                     <div className="section-gap">
   <label>Add More Photos</label>
   <input type="file" multiple accept="image/*" onChange={(e) => uploadMorePhotos(item.id, e)} />
