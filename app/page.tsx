@@ -860,20 +860,7 @@ const [useJob, setUseJob] = useState("")
       </div>
 
       <div style={{ marginTop: "40px" }}>
-        <h2>Job Material Usage</h2>
-
-        <input
-          placeholder="Search jobs..."
-          value={jobSearch}
-          onChange={(e) => setJobSearch(e.target.value)}
-          style={{
-            marginTop: "12px",
-            marginBottom: "12px",
-            padding: "6px",
-            width: "100%",
-            maxWidth: "300px",
-          }}
-        />
+   
 
         {jobEntries.length === 0 ? (
           <div className="empty">No job usage yet.</div>
