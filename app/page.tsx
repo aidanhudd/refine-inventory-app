@@ -541,72 +541,70 @@ export default function Home() {
                     </div>
 
                     <div className="section-gap">
-                      <label>Add More Photos</label>
-                      <input type="file" multiple accept="image/*" onChange={(e) => uploadMorePhotos(item.id, e)} />
-                      <div className="small">
-                        {uploadingItemId === item.id ? "Uploading..." : photos.length ? `${photos.length} photo(s)` : "No photos yet."}
-                      </div>  
-                      
-                      {photos.length > 0 && (
-                        
+  <label>Add More Photos</label>
+  <input type="file" multiple accept="image/*" onChange={(e) => uploadMorePhotos(item.id, e)} />
+  <div className="small">
+    {uploadingItemId === item.id ? "Uploading..." : photos.length ? `${photos.length} photo(s)` : "No photos yet."}
+  </div>
+
+  {photos.length > 0 && (
     <div className="photo-grid">
-  {photos.slice(0, 6).map((url) => {
-    const filePath = url.split("/inventory-photos/")[1]
+      {photos.slice(0, 6).map((url) => {
+        const filePath = url.split("/inventory-photos/")[1]
 
-    return (
-      <div
-        key={url}
-        className="photo-box"
-        style={{ position: "relative" }}
-      >
-        {/* DELETE BUTTON */}
-        <button
-          onClick={async (e) => {
-            e.stopPropagation()
+        return (
+          <div
+            key={url}
+            className="photo-box"
+            style={{ position: "relative" }}
+          >
+            <button
+              onClick={async (e) => {
+                e.stopPropagation()
 
-            const confirmed = confirm("Delete this photo?")
-            if (!confirmed) return
+                const confirmed = confirm("Delete this photo?")
+                if (!confirmed) return
 
-            const { error } = await supabase
-              .storage
-              .from("inventory-photos")
-              .remove([filePath])
+                const { error } = await supabase
+                  .storage
+                  .from("inventory-photos")
+                  .remove([filePath])
 
-            if (error) {
-              alert(error.message)
-            } else {
-              await loadAll()
-            }
-          }}
-          style={{
-            position: "absolute",
-            top: 4,
-            right: 4,
-            background: "rgba(0,0,0,0.7)",
-            color: "white",
-            border: "none",
-            borderRadius: "50%",
-            width: 22,
-            height: 22,
-            cursor: "pointer",
-            fontSize: 12,
-          }}
-        >
-          ×
-        </button>
+                if (error) {
+                  alert(error.message)
+                } else {
+                  await loadAll()
+                }
+              }}
+              style={{
+                position: "absolute",
+                top: 4,
+                right: 4,
+                background: "rgba(0,0,0,0.7)",
+                color: "white",
+                border: "none",
+                borderRadius: "50%",
+                width: 22,
+                height: 22,
+                cursor: "pointer",
+                fontSize: 12,
+              }}
+            >
+              ×
+            </button>
 
-        {/* IMAGE */}
-        <img
-          src={url}
-          alt="Inventory item"
-          onClick={() => setActiveImage(url)}
-          style={{ cursor: "pointer" }}
-        />
-      </div>
-    )
-  })}
+            <img
+              src={url}
+              alt="Inventory item"
+              onClick={() => setActiveImage(url)}
+              style={{ cursor: "pointer" }}
+            />
+          </div>
+        )
+      })}
+    </div>
+  )}
 </div>
-)}
 
                     <div className="action-row">
                       <button className="btn-edit btn-small" onClick={() => startEdit(item)}>Edit</button>
