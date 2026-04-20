@@ -705,18 +705,29 @@ const markSold = async (id: string) => {
     
                     <div className="section-gap">
   <label>Add More Photos</label>
-  <input type="file" multiple accept="image/*" onChange={(e) => uploadMorePhotos(item.id, e)} />
+
+  <input
+    type="file"
+    multiple
+    accept="image/*"
+    onChange={(e) => uploadMorePhotos(item.id, e)}
+  />
+
   <div className="small">
-    {uploadingItemId === item.id ? "Uploading..." : photos.length ? `${photos.length} photo(s)` : "No photos yet."}
+    {uploadingItemId === item.id
+      ? "Uploading..."
+      : photos.length
+      ? `${photos.length} photo(s)`
+      : "No photos yet."}
   </div>
 
   {photos.length > 0 && (
     <div className="photo-grid">
       {photos.slice(0, 6).map((url) => {
-      const filePath = url
-  .split("/storage/v1/object/public/inventory-photos/")[1]
-  ?.replace(/"/g, "")
-      
+        const filePath = url
+          .split("/storage/v1/object/public/inventory-photos/")[1]
+          ?.replace(/"/g, "")
+
         return (
           <div
             key={url}
@@ -770,7 +781,6 @@ const markSold = async (id: string) => {
     </div>
   )}
 </div>
-
                    <div className="action-row">
   <button
     className="btn-edit btn-small"
