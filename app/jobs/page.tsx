@@ -55,7 +55,11 @@ export default function JobsPage() {
   return (
     <main style={{ padding: "20px" }}>
       <h1>Job Material Usage</h1>
-
+      <Link href="/">
+  <button style={{ marginBottom: "16px" }}>
+    ← Back to Inventory
+  </button>
+</Link>
       <input
         placeholder="Search jobs..."
         value={search}
