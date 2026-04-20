@@ -411,9 +411,9 @@ const markSold = async (id: string) => {
     grouped[row.item_id].push(row)
   })
 
-  setUsageMap(grouped)
-    buildJobMap(data || [])
+  setUsageMap(grouped)   //
 }
+
   const buildJobMap = (usage: any[]) => {
   const grouped: Record<string, any[]> = {}
 
