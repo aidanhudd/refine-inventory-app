@@ -388,6 +388,7 @@ const markSold = async (id: string) => {
   })
 
   setUsageMap(grouped)
+    buildJobMap(data || [])
 }
   const buildJobMap = (usage: any[]) => {
   const grouped: Record<string, any[]> = {}
@@ -761,6 +762,40 @@ const markSold = async (id: string) => {
           />
         </div>
       )}
-    </main>
+      <div style={{ marginTop: "40px" }}>
+  <h2>Job Material Usage</h2>
+
+  {Object.keys(jobMap).length === 0 ? (
+    <div className="empty">No job usage yet.</div>
+  ) : (
+    Object.entries(jobMap).map(([job, entries]) => {
+      let total = 0
+
+      return (
+        <div key={job} className="card" style={{ marginBottom: "16px" }}>
+          <h3>{job}</h3>
+
+          {entries.map((u) => {
+            const item = items.find(i => i.id === u.item_id)
+            const cost = Number(item?.unit_cost || 0)
+            const value = cost * Number(u.quantity_used)
+
+            total += value
+
+            return (
+              <div key={u.id} style={{ fontSize: "13px", marginTop: "4px" }}>
+                • {item?.product_name || "Item"} — {u.quantity_used} {item?.quantity_type || ""} — ${value.toFixed(0)}
+              </div>
+            )
+          })}
+
+          <div style={{ marginTop: "8px", fontWeight: "bold" }}>
+            Total Material: ${total.toFixed(0)}
+          </div>
+        </div>
+      )
+    })
+  )}
+</div>    </main>
   )
 }
