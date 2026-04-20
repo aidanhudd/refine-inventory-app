@@ -116,6 +116,7 @@ export default function Home() {
     }))
 
     await loadPhotosForItems(loadedItems)
+    await loadusages()
     setLoading(false)
   }
 
