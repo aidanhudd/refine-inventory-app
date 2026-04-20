@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react"
 import { supabase } from "../../lib/supabaseClient"
+import Link from "next/link"
 
 type UsageRow = {
   id: string
