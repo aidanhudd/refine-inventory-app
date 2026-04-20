@@ -318,7 +318,7 @@ const useInventory = async (itemId: string, qty: number, jobName: string) => {
     .eq("id", itemId)
 
   await loadAll()
-  
+}
 const markSold = async (id: string) => {
   setErrorMessage("")
   setMessage("")
@@ -344,7 +344,7 @@ const markSold = async (id: string) => {
   setMessage("Item marked as sold.")
   await loadAll()
 }
-  }
+  
 
   const uploadMorePhotos = async (itemId: string, e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
