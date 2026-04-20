@@ -646,7 +646,7 @@ const markSold = async (id: string) => {
     })}
   </div>
 )}
-        >
+  
           <span>
             • {u.job_name} — {u.quantity_used} {item.quantity_type} —{" "}
             {new Date(u.used_at).toLocaleDateString()}
