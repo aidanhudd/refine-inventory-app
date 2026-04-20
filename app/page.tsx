@@ -663,26 +663,45 @@ const markSold = async (id: string) => {
               const confirmed = confirm("Undo this usage?")
               if (!confirmed) return
 
-              undoUsage(u.id, item.id, u.quantity_used)
-            }}
-            style={{
-              marginLeft: "8px",
-              background: "red",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "11px",
-              padding: "2px 6px",
-            }}
-          >
-            Undo
-          </button>
-        </div>
-      )
-    })}
-  </div>
-)}
+              const undoUsage = async (usageId: string, itemId: string, qty: number) => {
+  console.log("UNDO CLICKED:", { usageId, itemId, qty })
+
+  // 1. delete usage record
+  const { data: deleteData, error: deleteError } = await supabase
+    .from("inventory_usage")
+    .delete()
+    .eq("id", usageId)
+
+  console.log("DELETE RESULT:", deleteData, deleteError)
+
+  if (deleteError) {
+    alert(deleteError.message)
+    return
+  }
+
+  // 2. restore inventory
+  const item = items.find(i => i.id === itemId)
+  if (!item) {
+    console.log("ITEM NOT FOUND")
+    return
+  }
+
+  const newQty = Number(item.quantity_on_hand || 0) + Number(qty)
+
+  const { error: updateError } = await supabase
+    .from("inventory_items")
+    .update({ quantity_on_hand: newQty })
+    .eq("id", itemId)
+
+  console.log("UPDATE RESULT:", updateError)
+
+  if (updateError) {
+    alert(updateError.message)
+    return
+  }
+
+  await loadAll()
+}
     
                     <div className="section-gap">
   <label>Add More Photos</label>
