@@ -365,6 +365,29 @@ const markSold = async (id: string) => {
     setUploadingItemId(null)
   }
 
+  const loadUsage = async () => {
+  const { data, error } = await supabase
+    .from("inventory_usage")
+    .select("*")
+    .order("used_at", { ascending: false })
+
+  if (error) {
+    console.log(error.message)
+    return
+  }
+
+  const grouped: Record<string, any[]> = {}
+
+  data?.forEach((row) => {
+    if (!grouped[row.item_id]) {
+      grouped[row.item_id] = []
+    }
+    grouped[row.item_id].push(row)
+  })
+
+  setUsageMap(grouped)
+}
+
   return (
     <main>
       <div className="topbar">
