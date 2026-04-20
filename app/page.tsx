@@ -638,7 +638,7 @@ const markSold = async (id: string) => {
                       <div><strong>Notes:</strong> {item.notes || "—"}</div>
                     </div>
                     
-             {usageMap[item.id]?.length > 0 && (
+        {usageMap[item.id]?.length > 0 && (
   <div className="section-gap">
     <strong>Usage History</strong>
 
@@ -654,7 +654,8 @@ const markSold = async (id: string) => {
           }}
         >
           <span>
-            • {u.job_name || "No Job"} — {u.quantity_used || 0} {item.quantity_type || ""} —{" "}
+            • {u.job_name || "No Job"} — {u.quantity_used || 0}{" "}
+            {item.quantity_type || ""} —{" "}
             {u.used_at ? new Date(u.used_at).toLocaleDateString() : ""}
           </span>
 
@@ -663,8 +664,26 @@ const markSold = async (id: string) => {
               const confirmed = confirm("Undo this usage?")
               if (!confirmed) return
 
-              const undoUsage = async (usageId: string, itemId: string, qty: number) => {
-  console.log("UNDO CLICKED:", { usageId, itemId, qty })
+              undoUsage(u.id, item.id, u.quantity_used)
+            }}
+            style={{
+              marginLeft: "8px",
+              background: "red",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "11px",
+              padding: "2px 6px",
+            }}
+          >
+            Undo
+          </button>
+        </div>
+      )
+    })}
+  </div>
+)}
 
   // 1. delete usage record
   const { data: deleteData, error: deleteError } = await supabase
