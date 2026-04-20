@@ -27,6 +27,15 @@ type InventoryItem = {
   created_at: string | null
 }
 
+type UsageRow = {
+  id: string
+  item_id: string
+  job_name: string | null
+  quantity_used: number | null
+  notes: string | null
+  used_at: string | null
+}
+
 type PhotoMap = Record<string, string[]>
 
 const defaultForm = {
@@ -45,11 +54,13 @@ export default function Home() {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [quantityTypes, setQuantityTypes] = useState<QuantityType[]>([])
+  const [usageList, setUsageList] = useState<UsageRow[]>([])
   const [form, setForm] = useState(defaultForm)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
+  const [jobSearch, setJobSearch] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
@@ -58,33 +69,7 @@ export default function Home() {
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null)
   const [photoMap, setPhotoMap] = useState<PhotoMap>({})
   const [activeImage, setActiveImage] = useState<string | null>(null)
-  const [usageMap, setUsageMap] = useState<Record<string, any[]>>({})
-  const [jobMap, setJobMap] = useState<Record<string, any[]>>({}) 
-  const undoUsage = async (usageId: string, itemId: string, qty: number) => {
-  // delete usage record
-  const { error } = await supabase
-    .from("inventory_usage")
-    .delete()
-    .eq("id", usageId)
 
-  if (error) {
-    alert(error.message)
-    return
-  }
-
-  // restore inventory
-  const item = items.find(i => i.id === itemId)
-  if (!item) return
-
-  const newQty = Number(item.quantity_on_hand || 0) + Number(qty)
-
-  await supabase
-    .from("inventory_items")
-    .update({ quantity_on_hand: newQty })
-    .eq("id", itemId)
-
-  await loadAll()
-}
   useEffect(() => {
     loadAll()
   }, [])
@@ -92,22 +77,24 @@ export default function Home() {
   const loadAll = async () => {
     setLoading(true)
     setErrorMessage("")
-    await loadUsage()
 
-    const [itemsRes, categoriesRes, quantityTypesRes] = await Promise.all([
+    const [itemsRes, categoriesRes, quantityTypesRes, usageRes] = await Promise.all([
       supabase.from("inventory_items").select("*").order("created_at", { ascending: false }),
       supabase.from("categories").select("*").order("name", { ascending: true }),
       supabase.from("quantity_types").select("*").order("name", { ascending: true }),
+      supabase.from("inventory_usage").select("*").order("used_at", { ascending: false }),
     ])
 
     if (itemsRes.error) setErrorMessage(itemsRes.error.message)
     if (categoriesRes.error) setErrorMessage(categoriesRes.error.message)
     if (quantityTypesRes.error) setErrorMessage(quantityTypesRes.error.message)
+    if (usageRes.error) setErrorMessage(usageRes.error.message)
 
     const loadedItems = itemsRes.data || []
     setItems(loadedItems)
     setCategories(categoriesRes.data || [])
     setQuantityTypes(quantityTypesRes.data || [])
+    setUsageList((usageRes.data as UsageRow[]) || [])
 
     setForm((prev) => ({
       ...prev,
@@ -116,17 +103,18 @@ export default function Home() {
     }))
 
     await loadPhotosForItems(loadedItems)
-    await loadUsage()
     setLoading(false)
   }
 
   const loadPhotosForItems = async (loadedItems: InventoryItem[]) => {
     const nextMap: PhotoMap = {}
+
     for (const item of loadedItems) {
       const { data, error } = await supabase.storage.from("inventory-photos").list(item.id, {
-        limit: 12,
+        limit: 20,
         sortBy: { column: "name", order: "asc" },
       })
+
       if (!error && data) {
         nextMap[item.id] = data.map((file) => {
           const { data: publicUrlData } = supabase.storage
@@ -136,6 +124,7 @@ export default function Home() {
         })
       }
     }
+
     setPhotoMap(nextMap)
   }
 
@@ -149,13 +138,13 @@ export default function Home() {
     return items.filter((item) => {
       const categoryName = item.category_id ? categoryNameById.get(item.category_id) || "" : ""
       const haystack = [
-        item.sku,
-        item.product_name,
+        item.sku || "",
+        item.product_name || "",
         categoryName,
-        item.quantity_type,
-        item.warehouse_location,
-        item.notes,
-        item.status,
+        item.quantity_type || "",
+        item.warehouse_location || "",
+        item.notes || "",
+        item.status || "",
       ]
         .join(" ")
         .toLowerCase()
@@ -163,6 +152,7 @@ export default function Home() {
       const matchesSearch = !search || haystack.includes(search.toLowerCase())
       const matchesStatus = statusFilter === "all" || (item.status || "").toLowerCase() === statusFilter
       const matchesCategory = categoryFilter === "all" || item.category_id === categoryFilter
+
       return matchesSearch && matchesStatus && matchesCategory
     })
   }, [items, search, statusFilter, categoryFilter, categoryNameById])
@@ -182,6 +172,20 @@ export default function Home() {
   const lowStockCount = useMemo(() => {
     return items.filter((item) => Number(item.quantity_on_hand || 0) <= 3).length
   }, [items])
+
+  const jobEntries = useMemo(() => {
+    const grouped: Record<string, UsageRow[]> = {}
+
+    usageList.forEach((row) => {
+      const key = (row.job_name || "No Job").trim() || "No Job"
+      if (!grouped[key]) grouped[key] = []
+      grouped[key].push(row)
+    })
+
+    return Object.entries(grouped)
+      .filter(([job]) => job.toLowerCase().includes(jobSearch.toLowerCase()))
+      .sort((a, b) => a[0].localeCompare(b[0]))
+  }, [usageList, jobSearch])
 
   const handleChange = (key: string, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -204,11 +208,13 @@ export default function Home() {
 
   const uploadPhotos = async (itemId: string, files: File[]) => {
     if (!files.length) return
+
     for (const file of files) {
       const safeName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`
-      const { error } = await supabase.storage.from("inventory-photos").upload(`${itemId}/${safeName}`, file, {
-        upsert: true,
-      })
+      const { error } = await supabase.storage
+        .from("inventory-photos")
+        .upload(`${itemId}/${safeName}`, file, { upsert: true })
+
       if (error) throw error
     }
   }
@@ -238,6 +244,7 @@ export default function Home() {
 
     if (editingId) {
       const { error } = await supabase.from("inventory_items").update(payload).eq("id", editingId)
+
       if (error) {
         setErrorMessage(error.message)
         setSaving(false)
@@ -260,7 +267,11 @@ export default function Home() {
       return
     }
 
-    const { data, error } = await supabase.from("inventory_items").insert([payload]).select().single()
+    const { data, error } = await supabase
+      .from("inventory_items")
+      .insert([payload])
+      .select()
+      .single()
 
     if (error) {
       setErrorMessage(error.message)
@@ -310,6 +321,7 @@ export default function Home() {
     setMessage("")
 
     const { error } = await supabase.from("inventory_items").delete().eq("id", id)
+
     if (error) {
       setErrorMessage(error.message)
       return
@@ -322,61 +334,118 @@ export default function Home() {
     setMessage("Item deleted.")
     await loadAll()
   }
-  
-const useInventory = async (itemId: string, qty: number, jobName: string) => {
-  // 1. log usage
-  await supabase.from("inventory_usage").insert([
-    {
-      item_id: itemId,
-      job_name: jobName,
-      quantity_used: qty,
-    },
-  ])
 
-  // 2. subtract from inventory
-  const item = items.find(i => i.id === itemId)
+  const useInventory = async (itemId: string, qty: number, jobName: string) => {
+    setErrorMessage("")
+    setMessage("")
 
-  if (!item) return
+    const item = items.find((i) => i.id === itemId)
+    if (!item) return
 
-  const newQty = Number(item.quantity_on_hand || 0) - qty
+    const currentQty = Number(item.quantity_on_hand || 0)
 
-  await supabase
-    .from("inventory_items")
-    .update({ quantity_on_hand: newQty })
-    .eq("id", itemId)
+    if (qty <= 0) {
+      setErrorMessage("Usage quantity must be greater than 0.")
+      return
+    }
 
-  await loadAll()
-}
-const markSold = async (id: string) => {
-  setErrorMessage("")
-  setMessage("")
+    if (qty > currentQty) {
+      setErrorMessage("You cannot use more stock than you have.")
+      return
+    }
 
-  const { error } = await supabase
-    .from("inventory_items")
-    .update({ status: "sold", quantity_on_hand: 0 })
-    .eq("id", id)
+    const { error: usageError } = await supabase.from("inventory_usage").insert([
+      {
+        item_id: itemId,
+        job_name: jobName,
+        quantity_used: qty,
+      },
+    ])
 
-  if (error) {
-    setErrorMessage(error.message)
-    return
+    if (usageError) {
+      setErrorMessage(usageError.message)
+      return
+    }
+
+    const newQty = currentQty - qty
+
+    const { error: updateError } = await supabase
+      .from("inventory_items")
+      .update({ quantity_on_hand: newQty })
+      .eq("id", itemId)
+
+    if (updateError) {
+      setErrorMessage(updateError.message)
+      return
+    }
+
+    setMessage("Usage recorded.")
+    await loadAll()
   }
 
-  if (editingId === id) {
-    setForm((prev) => ({
-      ...prev,
-      status: "sold",
-      quantity_on_hand: "0",
-    }))
+  const undoUsage = async (usageId: string, itemId: string, qty: number) => {
+    setErrorMessage("")
+    setMessage("")
+
+    const { error: deleteError } = await supabase
+      .from("inventory_usage")
+      .delete()
+      .eq("id", usageId)
+
+    if (deleteError) {
+      setErrorMessage(deleteError.message)
+      return
+    }
+
+    const item = items.find((i) => i.id === itemId)
+    if (!item) return
+
+    const newQty = Number(item.quantity_on_hand || 0) + Number(qty || 0)
+
+    const { error: updateError } = await supabase
+      .from("inventory_items")
+      .update({ quantity_on_hand: newQty })
+      .eq("id", itemId)
+
+    if (updateError) {
+      setErrorMessage(updateError.message)
+      return
+    }
+
+    setMessage("Usage undone.")
+    await loadAll()
   }
 
-  setMessage("Item marked as sold.")
-  await loadAll()
-}
-  
+  const markSold = async (id: string) => {
+    setErrorMessage("")
+    setMessage("")
+
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({ status: "sold", quantity_on_hand: 0 })
+      .eq("id", id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    if (editingId === id) {
+      setForm((prev) => ({
+        ...prev,
+        status: "sold",
+        quantity_on_hand: "0",
+      }))
+    }
+
+    setMessage("Item marked as sold.")
+    await loadAll()
+  }
 
   const uploadMorePhotos = async (itemId: string, e: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
+
     setUploadingItemId(itemId)
     setErrorMessage("")
     setMessage("")
@@ -392,47 +461,6 @@ const markSold = async (id: string) => {
     setUploadingItemId(null)
   }
 
-  const loadUsage = async () => {
-  const { data, error } = await supabase
-    .from("inventory_usage")
-    .select("*")
-    .order("used_at", { ascending: false })
-
-  if (error) {
-    console.log(error.message)
-    return
-  }
-
-  const grouped: Record<string, any[]> = {}
-
-  data?.forEach((row) => {
-    const key = String(row.item_id) // 🔥 force string match
-
-    if (!grouped[key]) {
-      grouped[key] = []
-    }
-
-    grouped[key].push(row)
-  })
-
-  console.log("GROUPED USAGE:", grouped) // 🔍 debug
-
-  setUsageMap(grouped)
-}
-
-  const buildJobMap = (usage: any[]) => {
-  const grouped: Record<string, any[]> = {}
-
-  usage.forEach((row) => {
-    if (!grouped[row.job_name]) {
-      grouped[row.job_name] = []
-    }
-    grouped[row.job_name].push(row)
-  })
-
-  setJobMap(grouped)
-}
-
   return (
     <main>
       <div className="topbar">
@@ -440,7 +468,7 @@ const markSold = async (id: string) => {
           <div className="eyebrow">Refine Kitchen & Bath</div>
           <h1>Warehouse Inventory</h1>
           <p className="subtext">
-            Now with edit, sold, delete, photo upload support, and fullscreen image preview.
+            Inventory, photos, usage tracking, undo usage, and job search.
           </p>
         </div>
       </div>
@@ -468,7 +496,9 @@ const markSold = async (id: string) => {
         <section className="card">
           <h2>{editingId ? "Edit Inventory Item" : "Add Inventory Item"}</h2>
           <p className="subtext" style={{ marginBottom: "16px" }}>
-            {editingId ? "Update an existing item, then save changes." : "Add core product details and optional photos on creation."}
+            {editingId
+              ? "Update an existing item, then save changes."
+              : "Add core product details and optional photos on creation."}
           </p>
 
           {categories.length === 0 && (
@@ -484,7 +514,7 @@ const markSold = async (id: string) => {
           )}
 
           <div className="notice">
-            For photos to work, create a Supabase storage bucket named <strong>inventory-photos</strong> and make it public.
+            Photos use the <strong>inventory-photos</strong> bucket.
           </div>
 
           {message && <div className="success">{message}</div>}
@@ -506,14 +536,20 @@ const markSold = async (id: string) => {
               <select value={form.category_id} onChange={(e) => handleChange("category_id", e.target.value)}>
                 <option value="">Select category</option>
                 {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div className="field">
               <label>Quantity</label>
-              <input type="number" value={form.quantity_on_hand} onChange={(e) => handleChange("quantity_on_hand", e.target.value)} />
+              <input
+                type="number"
+                value={form.quantity_on_hand}
+                onChange={(e) => handleChange("quantity_on_hand", e.target.value)}
+              />
             </div>
 
             <div className="field">
@@ -521,7 +557,9 @@ const markSold = async (id: string) => {
               <select value={form.quantity_type} onChange={(e) => handleChange("quantity_type", e.target.value)}>
                 <option value="">Select quantity type</option>
                 {quantityTypes.map((qty) => (
-                  <option key={qty.id} value={qty.name}>{qty.name}</option>
+                  <option key={qty.id} value={qty.name}>
+                    {qty.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -533,7 +571,10 @@ const markSold = async (id: string) => {
 
             <div className="field">
               <label>Warehouse Location</label>
-              <input value={form.warehouse_location} onChange={(e) => handleChange("warehouse_location", e.target.value)} />
+              <input
+                value={form.warehouse_location}
+                onChange={(e) => handleChange("warehouse_location", e.target.value)}
+              />
             </div>
 
             <div className="field">
@@ -555,16 +596,20 @@ const markSold = async (id: string) => {
             <div className="field">
               <label>{editingId ? "Add New Photos While Editing" : "Photos"}</label>
               <input type="file" multiple accept="image/*" onChange={handleFileSelect} />
-              <div className="small">{selectedFiles.length ? `${selectedFiles.length} file(s) selected` : "No photos selected yet."}</div>
+              <div className="small">
+                {selectedFiles.length ? `${selectedFiles.length} file(s) selected` : "No photos selected yet."}
+              </div>
             </div>
 
             <div className="button-row">
               <button className="btn-primary" onClick={saveItem} disabled={saving}>
                 {saving ? "Saving..." : editingId ? "Save Changes" : "Save Item"}
               </button>
+
               <button className="btn-secondary" onClick={loadAll}>
                 Refresh Data
               </button>
+
               {editingId && (
                 <button className="btn-edit" onClick={resetForm}>
                   Cancel Edit
@@ -586,7 +631,9 @@ const markSold = async (id: string) => {
             <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
               <option value="all">All categories</option>
               {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                <option key={cat.id} value={cat.id}>
+                  {cat.name}
+                </option>
               ))}
             </select>
 
@@ -610,6 +657,7 @@ const markSold = async (id: string) => {
                 const categoryName = item.category_id ? categoryNameById.get(item.category_id) : ""
                 const qty = Number(item.quantity_on_hand || 0)
                 const photos = photoMap[item.id] || []
+                const itemUsage = usageList.filter((u) => u.item_id === item.id).slice(0, 5)
 
                 return (
                   <div key={item.id} className="item-card">
@@ -619,7 +667,9 @@ const markSold = async (id: string) => {
                         <div className="badges">
                           {categoryName && <span className="badge">{categoryName}</span>}
                           {item.status && (
-                            <span className={qty <= 3 || item.status === "low_stock" ? "badge badge-alert" : "badge"}>
+                            <span
+                              className={qty <= 3 || item.status === "low_stock" ? "badge badge-alert" : "badge"}
+                            >
                               {item.status}
                             </span>
                           )}
@@ -631,218 +681,230 @@ const markSold = async (id: string) => {
                     </div>
 
                     <div className="meta-grid">
-                      <div><strong>SKU:</strong> {item.sku || "—"}</div>
-                      <div><strong>Quantity:</strong> {qty} {item.quantity_type || ""}</div>
-                      <div><strong>Location:</strong> {item.warehouse_location || "—"}</div>
-                      <div><strong>Created:</strong> {item.created_at ? new Date(item.created_at).toLocaleDateString() : "—"}</div>
-                      <div><strong>Notes:</strong> {item.notes || "—"}</div>
+                      <div>
+                        <strong>SKU:</strong> {item.sku || "—"}
+                      </div>
+                      <div>
+                        <strong>Quantity:</strong> {qty} {item.quantity_type || ""}
+                      </div>
+                      <div>
+                        <strong>Location:</strong> {item.warehouse_location || "—"}
+                      </div>
+                      <div>
+                        <strong>Created:</strong>{" "}
+                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : "—"}
+                      </div>
+                      <div>
+                        <strong>Notes:</strong> {item.notes || "—"}
+                      </div>
                     </div>
-                    
-        {usageMap[item.id]?.length > 0 && (
-  <div className="section-gap">
-    <strong>Usage History</strong>
 
-    {usageMap[item.id].slice(0, 5).map((u) => {
-      return (
-        <div
-          key={u.id}
-          style={{
-            fontSize: "13px",
-            marginTop: "4px",
-            display: "flex",
-            justifyContent: "space-between",
-          }}
-        >
-          <span>
-            • {u.job_name || "No Job"} — {u.quantity_used || 0}{" "}
-            {item.quantity_type || ""} —{" "}
-            {u.used_at ? new Date(u.used_at).toLocaleDateString() : ""}
-          </span>
+                    {itemUsage.length > 0 && (
+                      <div className="section-gap">
+                        <strong>Usage History</strong>
 
-          <button
-            onClick={() => {
-              const confirmed = confirm("Undo this usage?")
-              if (!confirmed) return
+                        {itemUsage.map((u) => (
+                          <div
+                            key={u.id}
+                            style={{
+                              fontSize: "13px",
+                              marginTop: "4px",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: "8px",
+                            }}
+                          >
+                            <span>
+                              • {u.job_name || "No Job"} — {u.quantity_used || 0} {item.quantity_type || ""} —{" "}
+                              {u.used_at ? new Date(u.used_at).toLocaleDateString() : ""}
+                            </span>
 
-              undoUsage(u.id, item.id, u.quantity_used)
-            }}
-            style={{
-              marginLeft: "8px",
-              background: "red",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "11px",
-              padding: "2px 6px",
-            }}
-          >
-            Undo
-          </button>
-        </div>
-      )
-    })}
-  </div>
-)}
+                            <button
+                              onClick={() => {
+                                const confirmed = confirm("Undo this usage?")
+                                if (!confirmed) return
+                                undoUsage(u.id, item.id, Number(u.quantity_used || 0))
+                              }}
+                              style={{
+                                marginLeft: "8px",
+                                background: "red",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                fontSize: "11px",
+                                padding: "2px 6px",
+                              }}
+                            >
+                              Undo
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
 
-  // 1. delete usage record
-  const { data: deleteData, error: deleteError } = await supabase
-    .from("inventory_usage")
-    .delete()
-    .eq("id", usageId)
-
-  console.log("DELETE RESULT:", deleteData, deleteError)
-
-  if (deleteError) {
-    alert(deleteError.message)
-    return
-  }
-
-  // 2. restore inventory
-  const item = items.find(i => i.id === itemId)
-  if (!item) {
-    console.log("ITEM NOT FOUND")
-    return
-  }
-
-  const newQty = Number(item.quantity_on_hand || 0) + Number(qty)
-
-  const { error: updateError } = await supabase
-    .from("inventory_items")
-    .update({ quantity_on_hand: newQty })
-    .eq("id", itemId)
-
-  console.log("UPDATE RESULT:", updateError)
-
-  if (updateError) {
-    alert(updateError.message)
-    return
-  }
-
-  await loadAll()
-}
-    
                     <div className="section-gap">
-  <label>Add More Photos</label>
+                      <label>Add More Photos</label>
 
-  <input
-    type="file"
-    multiple
-    accept="image/*"
-    onChange={(e) => uploadMorePhotos(item.id, e)}
-  />
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={(e) => uploadMorePhotos(item.id, e)}
+                      />
 
-  <div className="small">
-    {uploadingItemId === item.id
-      ? "Uploading..."
-      : photos.length
-      ? `${photos.length} photo(s)`
-      : "No photos yet."}
-  </div>
+                      <div className="small">
+                        {uploadingItemId === item.id
+                          ? "Uploading..."
+                          : photos.length
+                          ? `${photos.length} photo(s)`
+                          : "No photos yet."}
+                      </div>
 
-  {photos.length > 0 && (
-    <div className="photo-grid">
-      {photos.slice(0, 6).map((url) => {
-        const filePath = url
-          .split("/storage/v1/object/public/inventory-photos/")[1]
-          ?.replace(/"/g, "")
+                      {photos.length > 0 && (
+                        <div className="photo-grid">
+                          {photos.slice(0, 6).map((url) => {
+                            const filePath = url
+                              .split("/storage/v1/object/public/inventory-photos/")[1]
+                              ?.replace(/"/g, "")
 
-        return (
-          <div
-            key={url}
-            className="photo-box"
-            style={{ position: "relative" }}
-          >
-            <button
-              onClick={async (e) => {
-                e.stopPropagation()
+                            return (
+                              <div
+                                key={url}
+                                className="photo-box"
+                                style={{ position: "relative" }}
+                              >
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation()
 
-                const confirmed = confirm("Delete this photo?")
-                if (!confirmed) return
+                                    const confirmed = confirm("Delete this photo?")
+                                    if (!confirmed) return
 
-                const { error } = await supabase
-                  .storage
-                  .from("inventory-photos")
-                  .remove([filePath])
+                                    const { error } = await supabase.storage
+                                      .from("inventory-photos")
+                                      .remove([filePath])
 
-                if (error) {
-                  alert(error.message)
-                } else {
-                  await loadAll()
-                }
-              }}
-              style={{
-                position: "absolute",
-                top: 4,
-                right: 4,
-                background: "rgba(0,0,0,0.7)",
-                color: "white",
-                border: "none",
-                borderRadius: "50%",
-                width: 22,
-                height: 22,
-                cursor: "pointer",
-                fontSize: 12,
-              }}
-            >
-              ×
-            </button>
+                                    if (error) {
+                                      alert(error.message)
+                                    } else {
+                                      await loadAll()
+                                    }
+                                  }}
+                                  style={{
+                                    position: "absolute",
+                                    top: 4,
+                                    right: 4,
+                                    background: "rgba(0,0,0,0.7)",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "50%",
+                                    width: 22,
+                                    height: 22,
+                                    cursor: "pointer",
+                                    fontSize: 12,
+                                  }}
+                                >
+                                  ×
+                                </button>
 
-            <img
-              src={url}
-              alt="Inventory item"
-              onClick={() => setActiveImage(url)}
-              style={{ cursor: "pointer" }}
-            />
-          </div>
-        )
-      })}
-    </div>
-  )}
-</div>
-                   <div className="action-row">
-  <button
-    className="btn-edit btn-small"
-    onClick={() => startEdit(item)}
-  >
-    Edit
-  </button>
+                                <img
+                                  src={url}
+                                  alt="Inventory item"
+                                  onClick={() => setActiveImage(url)}
+                                  style={{ cursor: "pointer" }}
+                                />
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
 
-  <button
-    className="btn-secondary btn-small"
-    onClick={() => markSold(item.id)}
-  >
-    Mark Sold
-  </button>
+                    <div className="action-row">
+                      <button className="btn-edit btn-small" onClick={() => startEdit(item)}>
+                        Edit
+                      </button>
 
-  <button
-    className="btn-danger btn-small"
-    onClick={() => deleteItem(item.id)}
-  >
-    Delete
-  </button>
+                      <button className="btn-secondary btn-small" onClick={() => markSold(item.id)}>
+                        Mark Sold
+                      </button>
 
-  <button
-    className="btn-secondary btn-small"
-    onClick={async () => {
-      const qty = Number(prompt("How much was used?"))
-      if (!qty) return
+                      <button className="btn-danger btn-small" onClick={() => deleteItem(item.id)}>
+                        Delete
+                      </button>
 
-      const job = prompt("Job name?")
-      if (!job) return
+                      <button
+                        className="btn-secondary btn-small"
+                        onClick={async () => {
+                          const qtyInput = prompt("How much was used?")
+                          const qty = Number(qtyInput)
+                          if (!qty) return
 
-      await useInventory(item.id, qty, job)
-    }}
-  >
-    Use
-  </button> 
-  </div>
+                          const job = prompt("Job name?")
+                          if (!job) return
+
+                          await useInventory(item.id, qty, job)
+                        }}
+                      >
+                        Use
+                      </button>
+                    </div>
                   </div>
                 )
               })}
             </div>
           )}
         </section>
+      </div>
+
+      <div style={{ marginTop: "40px" }}>
+        <h2>Job Material Usage</h2>
+
+        <input
+          placeholder="Search jobs..."
+          value={jobSearch}
+          onChange={(e) => setJobSearch(e.target.value)}
+          style={{
+            marginTop: "12px",
+            marginBottom: "12px",
+            padding: "6px",
+            width: "100%",
+            maxWidth: "300px",
+          }}
+        />
+
+        {jobEntries.length === 0 ? (
+          <div className="empty">No job usage yet.</div>
+        ) : (
+          jobEntries.map(([job, entries]) => {
+            let total = 0
+
+            return (
+              <div key={job} className="card" style={{ marginBottom: "16px" }}>
+                <h3>{job}</h3>
+
+                {entries.map((u) => {
+                  const item = items.find((i) => i.id === u.item_id)
+                  const cost = Number(item?.unit_cost || 0)
+                  const value = cost * Number(u.quantity_used || 0)
+                  total += value
+
+                  return (
+                    <div key={u.id} style={{ fontSize: "13px", marginTop: "4px" }}>
+                      • {item?.product_name || "Item"} — {u.quantity_used || 0} {item?.quantity_type || ""} — $
+                      {value.toFixed(0)}
+                    </div>
+                  )
+                })}
+
+                <div style={{ marginTop: "8px", fontWeight: "bold" }}>
+                  Total Material: ${total.toFixed(0)}
+                </div>
+              </div>
+            )
+          })
+        )}
       </div>
 
       {activeImage && (
@@ -874,40 +936,6 @@ const markSold = async (id: string) => {
           />
         </div>
       )}
-      <div style={{ marginTop: "40px" }}>
-  <h2>Job Material Usage</h2>
-
-  {Object.keys(jobMap).length === 0 ? (
-    <div className="empty">No job usage yet.</div>
-  ) : (
-    Object.entries(jobMap).map(([job, entries]) => {
-      let total = 0
-
-      return (
-        <div key={job} className="card" style={{ marginBottom: "16px" }}>
-          <h3>{job}</h3>
-
-          {entries.map((u) => {
-            const item = items.find(i => i.id === u.item_id)
-            const cost = Number(item?.unit_cost || 0)
-            const value = cost * Number(u.quantity_used)
-
-            total += value
-
-            return (
-              <div key={u.id} style={{ fontSize: "13px", marginTop: "4px" }}>
-                • {item?.product_name || "Item"} — {u.quantity_used} {item?.quantity_type || ""} — ${value.toFixed(0)}
-              </div>
-            )
-          })}
-
-          <div style={{ marginTop: "8px", fontWeight: "bold" }}>
-            Total Material: ${total.toFixed(0)}
-          </div>
-        </div>
-      )
-    })
-  )}
-</div>    </main>
+    </main>
   )
 }
