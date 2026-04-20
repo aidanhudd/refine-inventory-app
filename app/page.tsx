@@ -59,6 +59,7 @@ export default function Home() {
   const [photoMap, setPhotoMap] = useState<PhotoMap>({})
   const [activeImage, setActiveImage] = useState<string | null>(null)
   const [usageMap, setUsageMap] = useState<Record<string, any[]>>({})
+  const [jobMap, setJobMap] = useState<Record<string, any[]>>({})  
 
   useEffect(() => {
     loadAll()
@@ -387,6 +388,18 @@ const markSold = async (id: string) => {
   })
 
   setUsageMap(grouped)
+}
+  const buildJobMap = (usage: any[]) => {
+  const grouped: Record<string, any[]> = {}
+
+  usage.forEach((row) => {
+    if (!grouped[row.job_name]) {
+      grouped[row.job_name] = []
+    }
+    grouped[row.job_name].push(row)
+  })
+
+  setJobMap(grouped)
 }
 
   return (
