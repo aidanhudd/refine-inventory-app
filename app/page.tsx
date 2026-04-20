@@ -636,7 +636,18 @@ const useInventory = async (itemId: string, qty: number, jobName: string) => {
                       <button className="btn-edit btn-small" onClick={() => startEdit(item)}>Edit</button>
                       <button className="btn-secondary btn-small" onClick={() => markSold(item.id)}>Mark Sold</button>
                       <button className="btn-danger btn-small" onClick={() => deleteItem(item.id)}>Delete</button>
-                    </div>
+                      <button className="btn-secondary btn-small"onClick={async () => {
+    const qty = Number(prompt("How much was used?"))
+    if (!qty) return
+
+    const job = prompt("Job name?")
+    if (!job) return
+
+    await useInventory(item.id, qty, job)
+  }}
+>
+  Use
+</button>                    </div>
                   </div>
                 )
               })}
