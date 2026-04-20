@@ -58,6 +58,7 @@ export default function Home() {
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null)
   const [photoMap, setPhotoMap] = useState<PhotoMap>({})
   const [activeImage, setActiveImage] = useState<string | null>(null)
+  const [usageMap, setUsageMap] = useState<Record<string, any[]>>({})
 
   useEffect(() => {
     loadAll()
