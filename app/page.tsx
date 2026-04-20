@@ -319,7 +319,7 @@ const useInventory = async (itemId: string, qty: number, jobName: string) => {
 
   await loadAll()
   
-} const markSold = async (id: string) => {
+const markSold = async (id: string) => {
   setErrorMessage("")
   setMessage("")
 
@@ -334,13 +334,16 @@ const useInventory = async (itemId: string, qty: number, jobName: string) => {
   }
 
   if (editingId === id) {
-    setForm((prev) => ({ ...prev, status: "sold", quantity_on_hand: "0" }))
+    setForm((prev) => ({
+      ...prev,
+      status: "sold",
+      quantity_on_hand: "0",
+    }))
   }
 
   setMessage("Item marked as sold.")
   await loadAll()
 }
-    }
 
     if (editingId === id) {
       setForm((prev) => ({ ...prev, status: "sold", quantity_on_hand: "0" }))
