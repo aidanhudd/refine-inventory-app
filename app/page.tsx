@@ -633,7 +633,7 @@ const markSold = async (id: string) => {
                       <div><strong>Notes:</strong> {item.notes || "—"}</div>
                     </div>
                     
-                   {usageMap[item.id]?.length > 0 && (
+                   {usageMap[item.id]?.length > true && (
   <div className="section-gap">
     <strong>Usage History</strong>
 
