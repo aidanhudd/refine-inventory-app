@@ -343,6 +343,31 @@ const markSold = async (id: string) => {
       quantity_on_hand: "0",
     }))
   }
+  const undoUsage = async (usageId: string, itemId: string, qty: number) => {
+  // 1. delete usage log
+  const { error } = await supabase
+    .from("inventory_usage")
+    .delete()
+    .eq("id", usageId)
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  // 2. restore inventory
+  const item = items.find(i => i.id === itemId)
+  if (!item) return
+
+  const newQty = Number(item.quantity_on_hand || 0) + Number(qty)
+
+  await supabase
+    .from("inventory_items")
+    .update({ quantity_on_hand: newQty })
+    .eq("id", itemId)
+
+  await loadAll()
+}
 
   setMessage("Item marked as sold.")
   await loadAll()
