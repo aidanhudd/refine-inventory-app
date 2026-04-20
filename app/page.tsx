@@ -406,13 +406,18 @@ const markSold = async (id: string) => {
   const grouped: Record<string, any[]> = {}
 
   data?.forEach((row) => {
-    if (!grouped[row.item_id]) {
-      grouped[row.item_id] = []
+    const key = String(row.item_id) // 🔥 force string match
+
+    if (!grouped[key]) {
+      grouped[key] = []
     }
-    grouped[row.item_id].push(row)
+
+    grouped[key].push(row)
   })
 
-  setUsageMap(grouped)   //
+  console.log("GROUPED USAGE:", grouped) // 🔍 debug
+
+  setUsageMap(grouped)
 }
 
   const buildJobMap = (usage: any[]) => {
