@@ -478,6 +478,12 @@ const [useJob, setUseJob] = useState("")
           <p className="subtext">
             Inventory, photos, usage tracking, undo usage, and job search.
           </p>
+          <div style={{ marginTop: "10px" }}>
+  <Link href="/jobs">
+    <button className="btn-secondary">View Job Usage</button>
+  </Link>
+</div>
+        
         </div>
       </div>
 
