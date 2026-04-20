@@ -633,20 +633,21 @@ const markSold = async (id: string) => {
                       <div><strong>Notes:</strong> {item.notes || "—"}</div>
                     </div>
                     
-                   {usageMap[item.id]?.length > true && (
+             {usageMap[item.id]?.length > 0 && (
   <div className="section-gap">
     <strong>Usage History</strong>
 
     {usageMap[item.id].slice(0, 5).map((u) => {
       return (
-        <div key={u.id}>
-          • {u.job_name} — {u.quantity_used}
-        </div>
-      )
-    })}
-  </div>
-)}
-  
+        <div
+          key={u.id}
+          style={{
+            fontSize: "13px",
+            marginTop: "4px",
+            display: "flex",
+            justifyContent: "space-between",
+          }}
+        >
           <span>
             • {u.job_name} — {u.quantity_used} {item.quantity_type} —{" "}
             {new Date(u.used_at).toLocaleDateString()}
