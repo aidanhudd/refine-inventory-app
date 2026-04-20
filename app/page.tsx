@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabaseClient"
 import Link from "next/link"
 
 <Link href="/jobs">
-  <button className="btn-secondary">View Job Usage</button>
+  <button>View Job Usage</button>
 </Link>
 
 type Category = {
