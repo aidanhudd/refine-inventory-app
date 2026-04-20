@@ -665,7 +665,7 @@ const markSold = async (id: string) => {
     Undo
   </button>
 </div>
-    }
+    
                     <div className="section-gap">
   <label>Add More Photos</label>
   <input type="file" multiple accept="image/*" onChange={(e) => uploadMorePhotos(item.id, e)} />
