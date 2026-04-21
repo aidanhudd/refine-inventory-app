@@ -886,7 +886,7 @@ const [useJob, setUseJob] = useState("")
                       {value.toFixed(0)}
                     </div>
                   )
-                })}
+                })
 
                 <div style={{ marginTop: "8px", fontWeight: "bold" }}>
                   Total Material: ${total.toFixed(0)}
