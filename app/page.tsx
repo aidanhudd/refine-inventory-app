@@ -1001,6 +1001,5 @@ const [useJob, setUseJob] = useState("")
     </div>
   </div>
 )}   <main>
-  <NavBar />
   )
 }
