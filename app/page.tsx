@@ -5,10 +5,6 @@ import { supabase } from "../lib/supabaseClient"
 import Link from "next/link"
 import NavBar from "./components/NavBar"
 
-<Link href="/jobs">
-  <button className="btn-secondary">View Job Usage</button>
-</Link>
-
 type Category = {
   id: string
   name: string
