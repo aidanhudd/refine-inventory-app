@@ -999,7 +999,7 @@ const [useJob, setUseJob] = useState("")
         >
           Confirm
         </button>
-      </div>
-    </main>
-  )
-    })
+          </div>
+    </div>
+  </div>
+)}
