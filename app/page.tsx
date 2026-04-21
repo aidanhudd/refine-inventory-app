@@ -469,9 +469,19 @@ const [useJob, setUseJob] = useState("")
   <main>
     <NavBar />
     
-      <div className="topbar">
+   div className="topbar">
         <div>
-          <div className="eyebrow">Refine Kitchen & Bath</div>
+          <img
+            src="/logo.png"
+            alt="Refine Kitchen & Bath Logo"
+            style={{
+              height: "48px",
+              width: "auto",
+              display: "block",
+              marginBottom: "12px",
+              objectFit: "contain"
+            }}
+          />
           <h1>Warehouse Inventory</h1>
           <p className="subtext">
             Inventory, photos, usage tracking, undo usage, and job search.
