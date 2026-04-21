@@ -478,7 +478,6 @@ const [useJob, setUseJob] = useState("")
             Inventory, photos, usage tracking, undo usage, and job search.
           </p>
           <div style={{ marginTop: "10px" }}>
-
         </div>
       </div>
 
