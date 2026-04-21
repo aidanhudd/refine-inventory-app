@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
 import Link from "next/link"
+import NavBar from "./components/NavBar"
 
 <Link href="/jobs">
   <button className="btn-secondary">View Job Usage</button>
@@ -999,6 +1000,7 @@ const [useJob, setUseJob] = useState("")
       </div>
     </div>
   </div>
-)}    </main>
+)}   <main>
+  <NavBar />
   )
 }
