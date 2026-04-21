@@ -955,9 +955,11 @@ const [useJob, setUseJob] = useState("")
               >
                 Confirm
               </button>
-            </div>
-          </div>
-        </div>
+                       </div>   // closes .list
+          )}
+        </section>
+      </div>
+    
           {activeImage && (
         <div
           onClick={() => setActiveImage(null)}
