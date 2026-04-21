@@ -2,7 +2,6 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
-import Link from "next/link"
 import NavBar from "./components/NavBar"
 
 type Category = {
@@ -860,38 +859,6 @@ const [useJob, setUseJob] = useState("")
         </section>
       </div>
 
-      <div style={{ marginTop: "40px" }}>
-   
-
-        {jobEntries.length === 0 ? (
-          <div className="empty">No job usage yet.</div>
-        ) : (
-          jobEntries.map(([job, entries]) => {
-            let total = 0
-
-            return (
-              <div key={job} className="card" style={{ marginBottom: "16px" }}>
-               <h3>{job}</h3>
-
-<>
-  {entries.map((u) => {
-    const item = items.find((i) => i.id === u.item_id)
-    const cost = Number(item?.unit_cost || 0)
-    const value = cost * Number(u.quantity_used || 0)
-    total += value
-
-    return (
-      <div key={u.id} style={{ fontSize: "13px", marginTop: "4px" }}>
-        • {item?.product_name || "Item"} — {u.quantity_used || 0}{" "}
-        {item?.quantity_type || ""} — ${value.toFixed(0)}
-      </div>
-    )
-  })}
-
-  <div style={{ marginTop: "8px", fontWeight: "bold" }}>
-    Total Material: ${total.toFixed(0)}
-  </div>
-</>
 
           {activeImage && (
         <div
@@ -991,8 +958,106 @@ const [useJob, setUseJob] = useState("")
             </div>
           </div>
         </div>
+          {activeImage && (
+        <div
+          onClick={() => setActiveImage(null)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.9)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            cursor: "pointer",
+            padding: "24px",
+          }}
+        >
+          <img
+            src={activeImage}
+            alt="Full size inventory"
+            style={{
+              maxWidth: "95%",
+              maxHeight: "95%",
+              borderRadius: "12px",
+            }}
+          />
+        </div>
       )}
 
+      {useModalOpen && selectedItem && (
+        <div
+          onClick={() => setUseModalOpen(false)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              padding: "20px",
+              borderRadius: "12px",
+              width: "100%",
+              maxWidth: "400px",
+            }}
+          >
+            <h3>Use — {selectedItem.product_name}</h3>
+
+            <input
+              type="number"
+              placeholder="Quantity"
+              value={useQty}
+              onChange={(e) => setUseQty(e.target.value)}
+              style={{ width: "100%", marginBottom: "10px" }}
+            />
+
+            <input
+              placeholder="Job Name"
+              value={useJob}
+              onChange={(e) => setUseJob(e.target.value)}
+              style={{ width: "100%", marginBottom: "10px" }}
+            />
+
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <button onClick={() => setUseModalOpen(false)}>
+                Cancel
+              </button>
+
+              <button
+                onClick={async () => {
+                  const qty = Number(useQty)
+                  if (!qty || !useJob) {
+                    alert("Enter quantity and job")
+                    return
+                  }
+
+                  await useInventory(selectedItem.id, qty, useJob)
+
+                  setUseQty("")
+                  setUseJob("")
+                  setUseModalOpen(false)
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
+    
