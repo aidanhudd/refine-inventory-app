@@ -469,7 +469,7 @@ const [useJob, setUseJob] = useState("")
   <main>
     <NavBar />
     
-   div className="topbar">
+   <div className="topbar">
         <div>
           <img
             src="/logo.png"
