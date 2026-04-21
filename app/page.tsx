@@ -471,7 +471,8 @@ const [useJob, setUseJob] = useState("")
   }
 
   return (
-    <main>
+  <main>
+    <NavBar />
       <div className="topbar">
         <div>
           <div className="eyebrow">Refine Kitchen & Bath</div>
