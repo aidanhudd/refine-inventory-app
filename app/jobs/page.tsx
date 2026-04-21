@@ -1,6 +1,4 @@
 "use client"
-<main style={{ padding: "20px" }}>
-  <NavBar />
 
 import { useEffect, useState, useMemo } from "react"
 import { supabase } from "../../lib/supabaseClient"
@@ -109,6 +107,7 @@ export default function JobsPage() {
           )
         })
       )}
-    </main>
+    <main style={{ padding: "20px" }}>
+  <NavBar />
   )
 }
