@@ -1,8 +1,11 @@
 "use client"
+<main style={{ padding: "20px" }}>
+  <NavBar />
 
 import { useEffect, useState, useMemo } from "react"
 import { supabase } from "../../lib/supabaseClient"
 import Link from "next/link"
+import NavBar from "../components/NavBar"
 
 type UsageRow = {
   id: string
