@@ -1000,8 +1000,6 @@ const [useJob, setUseJob] = useState("")
           Confirm
         </button>
       </div>
-    </div>
-  </div>
-    <main>
+    </main>
   )
 }
