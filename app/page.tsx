@@ -475,7 +475,7 @@ const [useJob, setUseJob] = useState("")
             src="/logo.png"
             alt="Refine Kitchen & Bath Logo"
             style={{
-              height: "48px",
+              height: "60px",
               width: "auto",
               display: "block",
               marginBottom: "12px",
