@@ -872,30 +872,27 @@ const [useJob, setUseJob] = useState("")
 
             return (
               <div key={job} className="card" style={{ marginBottom: "16px" }}>
-                <h3>{job}</h3>
+               <h3>{job}</h3>
 
-                {entries.map((u) => {
-                  const item = items.find((i) => i.id === u.item_id)
-                  const cost = Number(item?.unit_cost || 0)
-                  const value = cost * Number(u.quantity_used || 0)
-                  total += value
+<>
+  {entries.map((u) => {
+    const item = items.find((i) => i.id === u.item_id)
+    const cost = Number(item?.unit_cost || 0)
+    const value = cost * Number(u.quantity_used || 0)
+    total += value
 
-                  return (
-                    <div key={u.id} style={{ fontSize: "13px", marginTop: "4px" }}>
-                      • {item?.product_name || "Item"} — {u.quantity_used || 0} {item?.quantity_type || ""} — $
-                      {value.toFixed(0)}
-                    </div>
-                  )
-                })
-
-                <div style={{ marginTop: "8px", fontWeight: "bold" }}>
-                  Total Material: ${total.toFixed(0)}
-                </div>
-              </div>
-            )
-          })
-        )}
+    return (
+      <div key={u.id} style={{ fontSize: "13px", marginTop: "4px" }}>
+        • {item?.product_name || "Item"} — {u.quantity_used || 0}{" "}
+        {item?.quantity_type || ""} — ${value.toFixed(0)}
       </div>
+    )
+  })}
+
+  <div style={{ marginTop: "8px", fontWeight: "bold" }}>
+    Total Material: ${total.toFixed(0)}
+  </div>
+</>
 
       {activeImage && (
         <div
