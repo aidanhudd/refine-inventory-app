@@ -955,7 +955,11 @@ const [useJob, setUseJob] = useState("")
               >
                 Confirm
               </button>
-                       </div>   // closes .list
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </section>
       </div>
