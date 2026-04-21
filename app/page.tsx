@@ -894,7 +894,7 @@ const [useJob, setUseJob] = useState("")
   </div>
 </>
 
-      {activeImage && (
+          {activeImage && (
         <div
           onClick={() => setActiveImage(null)}
           style={{
@@ -923,76 +923,77 @@ const [useJob, setUseJob] = useState("")
           />
         </div>
       )}
+
       {useModalOpen && selectedItem && (
-  <div
-    onClick={() => setUseModalOpen(false)}
-    style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100vw",
-      height: "100vh",
-      background: "rgba(0,0,0,0.6)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 9999,
-    }}
-  >
-    <div
-      onClick={(e) => e.stopPropagation()}
-      style={{
-        background: "white",
-        padding: "20px",
-        borderRadius: "12px",
-        width: "100%",
-        maxWidth: "400px",
-      }}
-    >
-      <h3>Use — {selectedItem.product_name}</h3>
-
-      <input
-        type="number"
-        placeholder="Quantity"
-        value={useQty}
-        onChange={(e) => setUseQty(e.target.value)}
-        style={{ width: "100%", marginBottom: "10px" }}
-      />
-
-      <input
-        placeholder="Job Name"
-        value={useJob}
-        onChange={(e) => setUseJob(e.target.value)}
-        style={{ width: "100%", marginBottom: "10px" }}
-      />
-
-      <div style={{ display: "flex", justifyContent: "space-between" }}>
-        <button onClick={() => setUseModalOpen(false)}>
-          Cancel
-        </button>
-
-        <button
-          onClick={async () => {
-            const qty = Number(useQty)
-            if (!qty || !useJob) {
-              alert("Enter quantity and job")
-              return
-            }
-
-            await useInventory(selectedItem.id, qty, useJob)
-
-            setUseQty("")
-            setUseJob("")
-            setUseModalOpen(false)
+        <div
+          onClick={() => setUseModalOpen(false)}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
           }}
         >
-          Confirm
-        </button>
-          </div>
-    </div>
-      </div>
-    )}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: "white",
+              padding: "20px",
+              borderRadius: "12px",
+              width: "100%",
+              maxWidth: "400px",
+            }}
+          >
+            <h3>Use — {selectedItem.product_name}</h3>
 
-  </main>
-)
+            <input
+              type="number"
+              placeholder="Quantity"
+              value={useQty}
+              onChange={(e) => setUseQty(e.target.value)}
+              style={{ width: "100%", marginBottom: "10px" }}
+            />
+
+            <input
+              placeholder="Job Name"
+              value={useJob}
+              onChange={(e) => setUseJob(e.target.value)}
+              style={{ width: "100%", marginBottom: "10px" }}
+            />
+
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <button onClick={() => setUseModalOpen(false)}>
+                Cancel
+              </button>
+
+              <button
+                onClick={async () => {
+                  const qty = Number(useQty)
+                  if (!qty || !useJob) {
+                    alert("Enter quantity and job")
+                    return
+                  }
+
+                  await useInventory(selectedItem.id, qty, useJob)
+
+                  setUseQty("")
+                  setUseJob("")
+                  setUseModalOpen(false)
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </main>
+  )
 }
