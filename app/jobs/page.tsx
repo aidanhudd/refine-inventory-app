@@ -1,8 +1,8 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
-import { supabase } from "../../lib/supabaseClient"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
+import { supabase } from "../../lib/supabaseClient"
 import NavBar from "../components/NavBar"
 
 type UsageRow = {
@@ -35,8 +35,8 @@ export default function JobsPage() {
       supabase.from("inventory_items").select("*"),
     ])
 
-    setUsage(usageRes.data || [])
-    setItems(itemsRes.data || [])
+    setUsage((usageRes.data as UsageRow[]) || [])
+    setItems((itemsRes.data as Item[]) || [])
   }
 
   const jobGroups = useMemo(() => {
@@ -55,12 +55,16 @@ export default function JobsPage() {
 
   return (
     <main style={{ padding: "20px" }}>
+      <NavBar />
+
       <h1>Job Material Usage</h1>
+
       <Link href="/">
-  <button style={{ marginBottom: "16px" }}>
-    ← Back to Inventory
-  </button>
-</Link>
+        <button style={{ marginBottom: "16px" }}>
+          ← Back to Inventory
+        </button>
+      </Link>
+
       <input
         placeholder="Search jobs..."
         value={search}
@@ -94,8 +98,8 @@ export default function JobsPage() {
 
                 return (
                   <div key={u.id} style={{ fontSize: "13px" }}>
-                    • {item?.product_name || "Item"} — {u.quantity_used}{" "}
-                    {item?.quantity_type} — ${value.toFixed(0)}
+                    • {item?.product_name || "Item"} — {u.quantity_used || 0}{" "}
+                    {item?.quantity_type || ""} — ${value.toFixed(0)}
                   </div>
                 )
               })}
@@ -107,7 +111,6 @@ export default function JobsPage() {
           )
         })
       )}
-    <main style={{ padding: "20px" }}>
-  <NavBar />
+    </main>
   )
 }
