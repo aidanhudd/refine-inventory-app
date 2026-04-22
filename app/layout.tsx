@@ -16,7 +16,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <img src="/logo.png" alt="Refine Kitchen & Bath Logo" className="app-logo" />
               <div>
                 <h1 className="app-title">Warehouse Inventory</h1>
-                <p className="subtext">Inventory, photos, usage tracking, undo usage, and job search.</p>
               </div>
             </div>
             <NavBar />
