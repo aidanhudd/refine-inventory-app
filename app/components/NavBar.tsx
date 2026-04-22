@@ -20,6 +20,7 @@ export default function NavBar() {
       style={{
         display: "flex",
         gap: "10px",
+        flexWrap: "wrap",
         marginBottom: "20px",
       }}
     >
@@ -30,6 +31,11 @@ export default function NavBar() {
       <Link href="/jobs" style={linkStyle("/jobs")}>
         Jobs
       </Link>
+
+      <Link href="/estimate" style={linkStyle("/estimate")}>
+        Estimate
+      </Link>
+ 
     </div>
   )
 }
