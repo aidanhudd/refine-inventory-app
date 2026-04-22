@@ -1,9 +1,18 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
+import { supabase } from "../../lib/supabaseClient"
+
+type InventoryItem = {
+  id: string
+  product_name: string | null
+  unit_cost: number | null
+  quantity_type: string | null
+}
 
 type EstimateLine = {
   id: string
+  inventoryItemId: string
   name: string
   quantity: string
   unitCost: string
@@ -11,6 +20,7 @@ type EstimateLine = {
 
 const createLine = (id: string): EstimateLine => ({
   id,
+  inventoryItemId: "",
   name: "",
   quantity: "",
   unitCost: "",
@@ -28,6 +38,31 @@ export default function EstimatePage() {
   const [jobName, setJobName] = useState("")
   const [clientName, setClientName] = useState("")
   const [lines, setLines] = useState<EstimateLine[]>([createLine("1")])
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([])
+  const [loadingItems, setLoadingItems] = useState(true)
+  const [loadError, setLoadError] = useState("")
+
+  useEffect(() => {
+    const loadInventory = async () => {
+      setLoadingItems(true)
+      setLoadError("")
+
+      const { data, error } = await supabase
+        .from("inventory_items")
+        .select("id, product_name, unit_cost, quantity_type")
+        .order("product_name", { ascending: true })
+
+      if (error) {
+        setLoadError(error.message)
+      } else {
+        setInventoryItems((data as InventoryItem[]) || [])
+      }
+
+      setLoadingItems(false)
+    }
+
+    loadInventory()
+  }, [])
 
   const subtotal = useMemo(
     () => lines.reduce((sum, line) => sum + toNumber(line.quantity) * toNumber(line.unitCost), 0),
@@ -36,6 +71,23 @@ export default function EstimatePage() {
 
   const updateLine = (id: string, key: keyof EstimateLine, value: string) => {
     setLines((prev) => prev.map((line) => (line.id === id ? { ...line, [key]: value } : line)))
+  }
+
+  const applyInventoryItemToLine = (lineId: string, inventoryItemId: string) => {
+    const item = inventoryItems.find((inv) => inv.id === inventoryItemId)
+    setLines((prev) =>
+      prev.map((line) => {
+        if (line.id !== lineId) return line
+        if (!item) return { ...line, inventoryItemId }
+
+        return {
+          ...line,
+          inventoryItemId: item.id,
+          name: item.product_name || line.name,
+          unitCost: item.unit_cost !== null ? String(item.unit_cost) : line.unitCost,
+        }
+      })
+    )
   }
 
   const addLine = () => setLines((prev) => [...prev, createLine(crypto.randomUUID())])
@@ -62,12 +114,31 @@ export default function EstimatePage() {
 
       <section className="card section-gap">
         <h2 style={{ marginBottom: "12px" }}>Line Items</h2>
+        {loadError && <div className="notice">Could not load inventory products: {loadError}</div>}
         <div className="list">
           {lines.map((line) => {
             const lineTotal = toNumber(line.quantity) * toNumber(line.unitCost)
+            const selectedInventoryItem = inventoryItems.find((item) => item.id === line.inventoryItemId)
             return (
               <div key={line.id} className="item-card">
                 <div className="form-grid">
+                  <div className="field">
+                    <label>Choose From Inventory</label>
+                    <select
+                      value={line.inventoryItemId}
+                      onChange={(e) => applyInventoryItemToLine(line.id, e.target.value)}
+                      disabled={loadingItems}
+                    >
+                      <option value="">
+                        {loadingItems ? "Loading products..." : "Select inventory product (optional)"}
+                      </option>
+                      {inventoryItems.map((item) => (
+                        <option key={item.id} value={item.id}>
+                          {item.product_name || "Unnamed product"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   <div className="field">
                     <label>Material / Item</label>
                     <input
@@ -99,6 +170,9 @@ export default function EstimatePage() {
                     />
                   </div>
                 </div>
+                {selectedInventoryItem?.quantity_type && (
+                  <p className="small">Unit type: {selectedInventoryItem.quantity_type}</p>
+                )}
                 <div className="action-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
                   <strong>Line Total: {currency(lineTotal)}</strong>
                   <button className="btn-secondary btn-small" onClick={() => removeLine(line.id)} type="button">
