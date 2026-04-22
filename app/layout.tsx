@@ -9,8 +9,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ padding: "20px" }}>
-        <NavBar />
+      <body>
+        <div className="app-nav-shell">
+          <NavBar />
+        </div>
         {children}
       </body>
     </html>
