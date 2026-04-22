@@ -475,7 +475,7 @@ const [useJob, setUseJob] = useState("")
             src="/logo.png"
             alt="Refine Kitchen & Bath Logo"
             style={{
-              height: "60px",
+              height: "48px",
               width: "auto",
               display: "block",
               marginBottom: "12px",
@@ -483,6 +483,7 @@ const [useJob, setUseJob] = useState("")
             }}
           />
           <h1>Warehouse Inventory</h1>
+    
           <p className="subtext">
             Inventory, photos, usage tracking, undo usage, and job search.
           </p>
@@ -902,28 +903,11 @@ const [useJob, setUseJob] = useState("")
       {useModalOpen && selectedItem && (
         <div
           onClick={() => setUseModalOpen(false)}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(0,0,0,0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-          }}
+          className="modal-overlay"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "white",
-              padding: "20px",
-              borderRadius: "12px",
-              width: "100%",
-              maxWidth: "400px",
-            }}
+            className="modal-panel"
           >
             <h3>Use — {selectedItem.product_name}</h3>
 
@@ -942,7 +926,7 @@ const [useJob, setUseJob] = useState("")
               style={{ width: "100%", marginBottom: "10px" }}
             />
 
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <div className="modal-actions">
               <button onClick={() => setUseModalOpen(false)}>
                 Cancel
               </button>

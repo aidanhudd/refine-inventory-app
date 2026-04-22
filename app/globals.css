@@ -13,6 +13,11 @@
   --success: #067647;
   --edit-bg: #eff8ff;
   --edit-text: #175cd3;
+  --input-bg: #ffffff;
+  --badge-bg: #f8fafc;
+  --empty-bg: #ffffff;
+  --photo-bg: #f8fafc;
+  --modal-overlay: rgba(2, 6, 23, 0.6);
 }
 
 * { box-sizing: border-box; }
@@ -31,7 +36,7 @@ h1, h2, h3, p { margin: 0; }
 .field { display: grid; gap: 6px; }
 label { font-size: 13px; color: var(--muted); }
 input, select, textarea, button { font: inherit; }
-input, select, textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+input, select, textarea { width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--input-bg); color: var(--text); }
 textarea { min-height: 90px; resize: vertical; }
 button { cursor: pointer; border: 0; border-radius: 12px; padding: 12px 14px; }
 .btn-primary { background: var(--primary); color: var(--primary-text); }
@@ -53,20 +58,48 @@ button { cursor: pointer; border: 0; border-radius: 12px; padding: 12px 14px; }
 .item-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .item-name { font-weight: 700; font-size: 18px; }
 .badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.badge { border: 1px solid var(--line); background: #f8fafc; color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
+.badge { border: 1px solid var(--line); background: var(--badge-bg); color: var(--text); border-radius: 999px; padding: 4px 10px; font-size: 12px; }
 .badge-alert { background: #fff1f2; border-color: #fecdd3; }
 .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 20px; font-size: 14px; }
 .meta-grid div { color: var(--muted); }
 .meta-grid strong { color: var(--text); }
-.empty { padding: 26px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 16px; background: #fff; }
+.empty { padding: 26px; text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 16px; background: var(--empty-bg); }
 .notice { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; padding: 12px 14px; border-radius: 12px; font-size: 14px; margin-bottom: 14px; }
 .success { background: var(--success-bg); border: 1px solid #abefc6; color: var(--success); padding: 12px 14px; border-radius: 12px; font-size: 14px; margin-bottom: 14px; }
 .small { color: var(--muted); font-size: 12px; margin-top: 8px; }
 .action-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px; margin-top: 12px; }
-.photo-box { aspect-ratio: 1 / 1; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #f8fafc; }
+.photo-box { aspect-ratio: 1 / 1; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--photo-bg); }
 .photo-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .section-gap { margin-top: 18px; }
+.modal-overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; background: var(--modal-overlay); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
+.modal-panel { width: 100%; max-width: 400px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 20px; }
+.modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #0b1220;
+    --card: #111a2b;
+    --text: #e6edf7;
+    --muted: #9fb0c8;
+    --line: #263349;
+    --primary: #e6edf7;
+    --primary-text: #0b1220;
+    --accent: #1a2740;
+    --danger: #ffb4ad;
+    --danger-bg: #4a1d20;
+    --success-bg: #113325;
+    --success: #8ce0b4;
+    --edit-bg: #1a2f56;
+    --edit-text: #b3d4ff;
+    --input-bg: #0f1728;
+    --badge-bg: #0f1728;
+    --empty-bg: #111a2b;
+    --photo-bg: #0f1728;
+    --modal-overlay: rgba(2, 6, 23, 0.76);
+  }
+}
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
