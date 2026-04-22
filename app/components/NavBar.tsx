@@ -6,36 +6,22 @@ import { usePathname } from "next/navigation"
 export default function NavBar() {
   const pathname = usePathname()
 
-  const linkStyle = (path: string) => ({
-    padding: "8px 16px",
-    borderRadius: "6px",
-    textDecoration: "none",
-    fontWeight: "500",
-    background: pathname === path ? "#111" : "#eee",
-    color: pathname === path ? "white" : "#333",
-  })
+  const linkClass = (path: string) =>
+    pathname === path ? "nav-link nav-link-active" : "nav-link"
 
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: "10px",
-        flexWrap: "wrap",
-        marginBottom: "20px",
-      }}
-    >
-      <Link href="/" style={linkStyle("/")}>
+    <nav className="nav-links" aria-label="Primary">
+      <Link href="/" className={linkClass("/")}>
         Inventory
       </Link>
 
-      <Link href="/jobs" style={linkStyle("/jobs")}>
+      <Link href="/jobs" className={linkClass("/jobs")}>
         Jobs
       </Link>
 
-      <Link href="/estimate" style={linkStyle("/estimate")}>
+      <Link href="/estimate" className={linkClass("/estimate")}>
         Estimate
       </Link>
- 
-    </div>
+    </nav>
   )
 }

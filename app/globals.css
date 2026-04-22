@@ -24,10 +24,17 @@
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: Arial, Helvetica, sans-serif; }
 body { min-height: 100vh; }
 main { max-width: 1280px; margin: 0 auto; padding: 24px; }
-.app-nav-shell { max-width: 1280px; margin: 0 auto; padding: 24px 24px 0; }
+.app-header-shell { max-width: 1280px; margin: 0 auto; padding: 24px 24px 0; }
 h1, h2, h3, p { margin: 0; }
 
 .topbar { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; }
+.app-header { align-items: center; }
+.app-brand { display: flex; align-items: center; gap: 14px; min-width: 260px; }
+.app-logo { height: 48px; width: auto; display: block; object-fit: contain; flex-shrink: 0; }
+.app-title { font-size: 28px; line-height: 1.15; }
+.nav-links { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.nav-link { padding: 8px 16px; border-radius: 8px; text-decoration: none; font-weight: 600; background: var(--accent); color: var(--text); border: 1px solid var(--line); }
+.nav-link-active { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
 .eyebrow { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
 .subtext { color: var(--muted); margin-top: 8px; font-size: 14px; }
 
@@ -103,6 +110,9 @@ button { cursor: pointer; border: 0; border-radius: 12px; padding: 12px 14px; }
 }
 
 @media (max-width: 900px) {
+  .app-header { align-items: flex-start; }
+  .app-brand { width: 100%; }
+  .nav-links { width: 100%; justify-content: flex-start; }
   .layout { grid-template-columns: 1fr; }
   .stats { grid-template-columns: repeat(2, 1fr); }
   .meta-grid { grid-template-columns: 1fr; }
