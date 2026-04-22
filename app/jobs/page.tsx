@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { supabase } from "../../lib/supabaseClient"
-import NavBar from "../components/NavBar"
 
 type UsageRow = {
   id: string
@@ -54,9 +53,7 @@ export default function JobsPage() {
   }, [usage, search])
 
   return (
-    <main style={{ padding: "20px" }}>
-      <NavBar />
-
+    <main>
       <h1>Job Material Usage</h1>
 
       <input

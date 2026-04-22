@@ -2,7 +2,6 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
-import NavBar from "./components/NavBar"
 
 type Category = {
   id: string
@@ -467,8 +466,6 @@ const [useJob, setUseJob] = useState("")
 
   return (
   <main>
-    <NavBar />
-    
    <div className="topbar">
         <div>
           <img

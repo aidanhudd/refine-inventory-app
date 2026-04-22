@@ -1,4 +1,5 @@
 import './globals.css'
+import NavBar from './components/NavBar'
 
 export const metadata = {
   title: 'Refine Inventory',
@@ -8,7 +9,10 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body style={{ padding: "20px" }}>
+        <NavBar />
+        {children}
+      </body>
     </html>
   )
 }
