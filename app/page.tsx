@@ -209,8 +209,29 @@ const [useJob, setUseJob] = useState("")
     setSelectedFiles(files)
   }
 
+  const getPhotoUrl = (itemId: string, fileName: string) => {
+    const { data: publicUrlData } = supabase.storage
+      .from("inventory-photos")
+      .getPublicUrl(`${itemId}/${fileName}`)
+    return publicUrlData.publicUrl
+  }
+
+  const loadPhotosForItem = async (itemId: string) => {
+    const { data, error } = await supabase.storage.from("inventory-photos").list(itemId, {
+      limit: 20,
+      sortBy: { column: "name", order: "asc" },
+    })
+
+    if (error) throw error
+
+    const urls = (data || []).map((file) => getPhotoUrl(itemId, file.name))
+    setPhotoMap((prev) => ({ ...prev, [itemId]: urls }))
+  }
+
   const uploadPhotos = async (itemId: string, files: File[]) => {
-    if (!files.length) return
+    if (!files.length) return []
+
+    const uploadedUrls: string[] = []
 
     for (const file of files) {
       const safeName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`
@@ -219,7 +240,10 @@ const [useJob, setUseJob] = useState("")
         .upload(`${itemId}/${safeName}`, file, { upsert: true })
 
       if (error) throw error
+      uploadedUrls.push(getPhotoUrl(itemId, safeName))
     }
+
+    return uploadedUrls
   }
 
   const saveItem = async () => {
@@ -246,24 +270,37 @@ const [useJob, setUseJob] = useState("")
     }
 
     if (editingId) {
-      const { error } = await supabase.from("inventory_items").update(payload).eq("id", editingId)
+      const { data: updatedItem, error } = await supabase
+        .from("inventory_items")
+        .update(payload)
+        .eq("id", editingId)
+        .select()
+        .single()
 
-      if (error) {
-        setErrorMessage(error.message)
+      if (error || !updatedItem) {
+        setErrorMessage(error?.message || "Failed to update item.")
         setSaving(false)
         return
       }
 
+      setItems((prev) =>
+        prev.map((item) => (item.id === editingId ? ({ ...item, ...updatedItem } as InventoryItem) : item))
+      )
+
       try {
         if (selectedFiles.length) {
-          await uploadPhotos(editingId, selectedFiles)
+          const uploadedUrls = await uploadPhotos(editingId, selectedFiles)
+          if (uploadedUrls.length) {
+            setPhotoMap((prev) => ({
+              ...prev,
+              [editingId]: [...(prev[editingId] || []), ...uploadedUrls],
+            }))
+          }
         }
         setMessage("Item updated successfully.")
         resetForm()
-        await loadAll()
       } catch (uploadError: any) {
         setErrorMessage(`Item updated, but photo upload failed: ${uploadError.message}`)
-        await loadAll()
       }
 
       setSaving(false)
@@ -284,14 +321,21 @@ const [useJob, setUseJob] = useState("")
 
     try {
       if (data?.id && selectedFiles.length) {
-        await uploadPhotos(data.id, selectedFiles)
+        const uploadedUrls = await uploadPhotos(data.id, selectedFiles)
+        if (uploadedUrls.length) {
+          setPhotoMap((prev) => ({ ...prev, [data.id]: uploadedUrls }))
+        }
+      }
+      if (data) {
+        setItems((prev) => [data as InventoryItem, ...prev])
       }
       setMessage("Item saved successfully.")
       resetForm()
-      await loadAll()
     } catch (uploadError: any) {
       setErrorMessage(`Item saved, but photo upload failed: ${uploadError.message}`)
-      await loadAll()
+      if (data) {
+        setItems((prev) => [data as InventoryItem, ...prev])
+      }
     }
 
     setSaving(false)
@@ -330,12 +374,19 @@ const [useJob, setUseJob] = useState("")
       return
     }
 
+    setItems((prev) => prev.filter((item) => item.id !== id))
+    setUsageList((prev) => prev.filter((usage) => usage.item_id !== id))
+    setPhotoMap((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+
     if (editingId === id) {
       resetForm()
     }
 
     setMessage("Item deleted.")
-    await loadAll()
   }
 
   const useInventory = async (itemId: string, qty: number, jobName: string) => {
@@ -357,16 +408,20 @@ const [useJob, setUseJob] = useState("")
       return
     }
 
-    const { error: usageError } = await supabase.from("inventory_usage").insert([
-      {
-        item_id: itemId,
-        job_name: jobName,
-        quantity_used: qty,
-      },
-    ])
+    const { data: insertedUsage, error: usageError } = await supabase
+      .from("inventory_usage")
+      .insert([
+        {
+          item_id: itemId,
+          job_name: jobName,
+          quantity_used: qty,
+        },
+      ])
+      .select()
+      .single()
 
-    if (usageError) {
-      setErrorMessage(usageError.message)
+    if (usageError || !insertedUsage) {
+      setErrorMessage(usageError?.message || "Failed to record usage.")
       return
     }
 
@@ -382,8 +437,13 @@ const [useJob, setUseJob] = useState("")
       return
     }
 
+    setItems((prev) =>
+      prev.map((inventoryItem) =>
+        inventoryItem.id === itemId ? { ...inventoryItem, quantity_on_hand: newQty } : inventoryItem
+      )
+    )
+    setUsageList((prev) => [insertedUsage as UsageRow, ...prev])
     setMessage("Usage recorded.")
-    await loadAll()
   }
 
   const undoUsage = async (usageId: string, itemId: string, qty: number) => {
@@ -415,8 +475,13 @@ const [useJob, setUseJob] = useState("")
       return
     }
 
+    setUsageList((prev) => prev.filter((usage) => usage.id !== usageId))
+    setItems((prev) =>
+      prev.map((inventoryItem) =>
+        inventoryItem.id === itemId ? { ...inventoryItem, quantity_on_hand: newQty } : inventoryItem
+      )
+    )
     setMessage("Usage undone.")
-    await loadAll()
   }
 
   const markSold = async (id: string) => {
@@ -441,8 +506,10 @@ const [useJob, setUseJob] = useState("")
       }))
     }
 
+    setItems((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, status: "sold", quantity_on_hand: 0 } : item))
+    )
     setMessage("Item marked as sold.")
-    await loadAll()
   }
 
   const uploadMorePhotos = async (itemId: string, e: ChangeEvent<HTMLInputElement>) => {
@@ -454,9 +521,16 @@ const [useJob, setUseJob] = useState("")
     setMessage("")
 
     try {
-      await uploadPhotos(itemId, files)
+      const uploadedUrls = await uploadPhotos(itemId, files)
+      if (uploadedUrls.length) {
+        setPhotoMap((prev) => ({
+          ...prev,
+          [itemId]: [...(prev[itemId] || []), ...uploadedUrls],
+        }))
+      } else {
+        await loadPhotosForItem(itemId)
+      }
       setMessage("Photos uploaded.")
-      await loadAll()
     } catch (error: any) {
       setErrorMessage(error.message)
     }
@@ -774,6 +848,11 @@ const [useJob, setUseJob] = useState("")
                                     const confirmed = confirm("Delete this photo?")
                                     if (!confirmed) return
 
+                                    if (!filePath) {
+                                      alert("Invalid photo path.")
+                                      return
+                                    }
+
                                     const { error } = await supabase.storage
                                       .from("inventory-photos")
                                       .remove([filePath])
@@ -781,7 +860,10 @@ const [useJob, setUseJob] = useState("")
                                     if (error) {
                                       alert(error.message)
                                     } else {
-                                      await loadAll()
+                                      setPhotoMap((prev) => ({
+                                        ...prev,
+                                        [item.id]: (prev[item.id] || []).filter((photoUrl) => photoUrl !== url),
+                                      }))
                                     }
                                   }}
                                   style={{
