@@ -70,6 +70,9 @@ const getActionableSupabaseError = (message: string) => {
   return message
 }
 
+const formatCurrency = (value: number) =>
+  value.toLocaleString(undefined, { style: "currency", currency: "USD" })
+
 export default function Home() {
   const { user } = useAuth()
   const [items, setItems] = useState<InventoryItem[]>([])
@@ -192,6 +195,12 @@ const [useJob, setUseJob] = useState("")
   const soldCount = useMemo(() => {
     return items.filter((item) => (item.status || "").toLowerCase() === "sold").length
   }, [items])
+
+  const formTotalValue = useMemo(() => {
+    const qty = Number(form.quantity_on_hand || 0)
+    const cost = Number(form.unit_cost || 0)
+    return qty * cost
+  }, [form.quantity_on_hand, form.unit_cost])
 
   const jobEntries = useMemo(() => {
     const grouped: Record<string, UsageRow[]> = {}
@@ -653,6 +662,11 @@ const [useJob, setUseJob] = useState("")
             </div>
 
             <div className="field">
+              <label>Total Value (Auto)</label>
+              <input value={formatCurrency(formTotalValue)} readOnly />
+            </div>
+
+            <div className="field">
               <label>Warehouse Location</label>
               <input
                 value={form.warehouse_location}
@@ -739,6 +753,7 @@ const [useJob, setUseJob] = useState("")
               {filteredItems.map((item) => {
                 const categoryName = item.category_id ? categoryNameById.get(item.category_id) : ""
                 const qty = Number(item.quantity_on_hand || 0)
+                const itemTotalValue = qty * Number(item.unit_cost || 0)
                 const photos = photoMap[item.id] || []
                 const itemUsage = usageList.filter((u) => u.item_id === item.id).slice(0, 5)
 
@@ -767,6 +782,9 @@ const [useJob, setUseJob] = useState("")
                       </div>
                       <div>
                         <strong>Quantity:</strong> {qty} {item.quantity_type || ""}
+                      </div>
+                      <div>
+                        <strong>Total Value:</strong> {formatCurrency(itemTotalValue)}
                       </div>
                       <div>
                         <strong>Location:</strong> {item.warehouse_location || "—"}
