@@ -127,6 +127,8 @@ button:focus-visible {
 .meta-grid strong { color: var(--text); }
 .item-price { text-align: right; align-self: flex-start; }
 .item-price strong { font-size: 20px; letter-spacing: -0.01em; }
+.inline-input { margin-top: 0; font-size: 14px; }
+.inline-textarea { min-height: 72px; margin-top: 4px; }
 .item-kpis {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

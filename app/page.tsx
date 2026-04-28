@@ -39,6 +39,13 @@ type UsageRow = {
 }
 
 type PhotoMap = Record<string, string[]>
+type InlineEditForm = {
+  product_name: string
+  quantity_on_hand: string
+  unit_cost: string
+  warehouse_location: string
+  notes: string
+}
 
 const defaultForm = {
   sku: "",
@@ -97,6 +104,9 @@ export default function Home() {
 const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
 const [useQty, setUseQty] = useState("")
 const [useJob, setUseJob] = useState("")
+  const [inlineEditingId, setInlineEditingId] = useState<string | null>(null)
+  const [inlineDraft, setInlineDraft] = useState<InlineEditForm | null>(null)
+  const [inlineSaving, setInlineSaving] = useState(false)
   useEffect(() => {
     loadAll()
   }, [])
@@ -384,6 +394,71 @@ const [useJob, setUseJob] = useState("")
       status: item.status || "active",
     })
     window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const startInlineEdit = (item: InventoryItem) => {
+    setInlineEditingId(item.id)
+    setInlineDraft({
+      product_name: item.product_name || "",
+      quantity_on_hand: String(item.quantity_on_hand ?? 0),
+      unit_cost: String(item.unit_cost ?? 0),
+      warehouse_location: item.warehouse_location || "",
+      notes: item.notes || "",
+    })
+    setErrorMessage("")
+    setMessage("")
+  }
+
+  const cancelInlineEdit = () => {
+    setInlineEditingId(null)
+    setInlineDraft(null)
+    setInlineSaving(false)
+  }
+
+  const updateInlineDraft = (key: keyof InlineEditForm, value: string) => {
+    setInlineDraft((prev) => (prev ? { ...prev, [key]: value } : prev))
+  }
+
+  const saveInlineEdit = async (item: InventoryItem) => {
+    if (!inlineDraft) return
+
+    if (!inlineDraft.product_name.trim()) {
+      setErrorMessage("Product name is required.")
+      return
+    }
+
+    setInlineSaving(true)
+    setErrorMessage("")
+    setMessage("")
+
+    const payload = {
+      product_name: inlineDraft.product_name,
+      quantity_on_hand: Number(inlineDraft.quantity_on_hand || 0),
+      unit_cost: Number(inlineDraft.unit_cost || 0),
+      warehouse_location: inlineDraft.warehouse_location || null,
+      notes: inlineDraft.notes || null,
+    }
+
+    const { data: updatedItem, error } = await supabase
+      .from("inventory_items")
+      .update(payload)
+      .eq("id", item.id)
+      .select()
+      .single()
+
+    if (error || !updatedItem) {
+      setErrorMessage(error?.message || "Failed to update item.")
+      setInlineSaving(false)
+      return
+    }
+
+    setItems((prev) =>
+      prev.map((existingItem) =>
+        existingItem.id === item.id ? ({ ...existingItem, ...updatedItem } as InventoryItem) : existingItem
+      )
+    )
+    setMessage("Item updated successfully.")
+    cancelInlineEdit()
   }
 
   const deleteItem = async (id: string) => {
@@ -755,6 +830,13 @@ const [useJob, setUseJob] = useState("")
                 const qty = Number(item.quantity_on_hand || 0)
                 const itemTotalValue = qty * Number(item.unit_cost || 0)
                 const statusLabel = (item.status || "active").replace(/_/g, " ")
+                const isInlineEditing = inlineEditingId === item.id && inlineDraft
+                const displayName = isInlineEditing ? inlineDraft.product_name : item.product_name
+                const displayQty = Number(isInlineEditing ? inlineDraft.quantity_on_hand : item.quantity_on_hand || 0)
+                const displayUnitCost = Number(isInlineEditing ? inlineDraft.unit_cost : item.unit_cost || 0)
+                const displayLocation = isInlineEditing ? inlineDraft.warehouse_location : item.warehouse_location || "—"
+                const displayNotes = isInlineEditing ? inlineDraft.notes : item.notes || "No notes"
+                const displayTotalValue = displayQty * displayUnitCost
                 const photos = photoMap[item.id] || []
                 const itemUsage = usageList.filter((u) => u.item_id === item.id).slice(0, 5)
 
@@ -762,7 +844,16 @@ const [useJob, setUseJob] = useState("")
                   <div key={item.id} className="item-card">
                     <div className="item-top">
                       <div>
-                        <div className="item-name">{item.product_name || "Untitled Item"}</div>
+                        {isInlineEditing ? (
+                          <input
+                            className="inline-input"
+                            value={inlineDraft.product_name}
+                            onChange={(e) => updateInlineDraft("product_name", e.target.value)}
+                            placeholder="Product name"
+                          />
+                        ) : (
+                          <div className="item-name">{displayName || "Untitled Item"}</div>
+                        )}
                         <div className="badges">
                           {categoryName && <span className="badge">{categoryName}</span>}
                           <span className="badge">{item.sku || "No SKU"}</span>
@@ -777,9 +868,18 @@ const [useJob, setUseJob] = useState("")
                     <div className="item-kpis">
                       <div className="item-kpi">
                         <div className="item-kpi-label">Quantity on Hand</div>
-                        <div className="item-kpi-value">
-                          {qty} <span className="item-kpi-unit">{item.quantity_type || ""}</span>
-                        </div>
+                        {isInlineEditing ? (
+                          <input
+                            className="inline-input"
+                            type="number"
+                            value={inlineDraft.quantity_on_hand}
+                            onChange={(e) => updateInlineDraft("quantity_on_hand", e.target.value)}
+                          />
+                        ) : (
+                          <div className="item-kpi-value">
+                            {displayQty} <span className="item-kpi-unit">{item.quantity_type || ""}</span>
+                          </div>
+                        )}
                       </div>
                       <div className="item-kpi item-kpi-status">
                         <div className="item-kpi-label">Stock Status</div>
@@ -789,10 +889,20 @@ const [useJob, setUseJob] = useState("")
 
                     <div className="meta-grid">
                       <div>
-                        <strong>Total Value:</strong> {formatCurrency(itemTotalValue)}
+                        <strong>Total Value:</strong> {formatCurrency(displayTotalValue)}
                       </div>
                       <div>
-                        <strong>Location:</strong> {item.warehouse_location || "—"}
+                        <strong>Location:</strong>{" "}
+                        {isInlineEditing ? (
+                          <input
+                            className="inline-input"
+                            value={inlineDraft.warehouse_location}
+                            onChange={(e) => updateInlineDraft("warehouse_location", e.target.value)}
+                            placeholder="Warehouse location"
+                          />
+                        ) : (
+                          displayLocation
+                        )}
                       </div>
                     </div>
 
@@ -802,7 +912,17 @@ const [useJob, setUseJob] = useState("")
                         {item.created_at ? new Date(item.created_at).toLocaleDateString() : "—"}
                       </div>
                       <div>
-                        <strong>Notes:</strong> {item.notes || "No notes"}
+                        <strong>Notes:</strong>{" "}
+                        {isInlineEditing ? (
+                          <textarea
+                            className="inline-textarea"
+                            value={inlineDraft.notes}
+                            onChange={(e) => updateInlineDraft("notes", e.target.value)}
+                            placeholder="Notes"
+                          />
+                        ) : (
+                          displayNotes
+                        )}
                       </div>
                     </div>
 
@@ -937,9 +1057,25 @@ const [useJob, setUseJob] = useState("")
                     </div>
 
                     <div className="action-row">
-                      <button className="btn-edit btn-small" onClick={() => startEdit(item)}>
-                        Edit
-                      </button>
+                      {isInlineEditing ? (
+                        <>
+                          <button className="btn-primary btn-small" disabled={inlineSaving} onClick={() => saveInlineEdit(item)}>
+                            {inlineSaving ? "Saving..." : "Save"}
+                          </button>
+                          <button className="btn-secondary btn-small" disabled={inlineSaving} onClick={cancelInlineEdit}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn-edit btn-small" onClick={() => startInlineEdit(item)}>
+                            Edit
+                          </button>
+                          <button className="btn-secondary btn-small" onClick={() => startEdit(item)}>
+                            Edit in Form
+                          </button>
+                        </>
+                      )}
 
                       <button className="btn-secondary btn-small" onClick={() => markSold(item.id)}>
                         Mark Sold
