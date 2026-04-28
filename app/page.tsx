@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
+import { useAuth } from "./components/AuthProvider"
 
 type Category = {
   id: string
@@ -30,6 +31,7 @@ type InventoryItem = {
 type UsageRow = {
   id: string
   item_id: string
+  user_id: string | null
   job_name: string | null
   quantity_used: number | null
   notes: string | null
@@ -51,6 +53,7 @@ const defaultForm = {
 }
 
 export default function Home() {
+  const { user } = useAuth()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [quantityTypes, setQuantityTypes] = useState<QuantityType[]>([])
@@ -393,6 +396,11 @@ const [useJob, setUseJob] = useState("")
     setErrorMessage("")
     setMessage("")
 
+    if (!user) {
+      setErrorMessage("You must be logged in to record usage.")
+      return
+    }
+
     const item = items.find((i) => i.id === itemId)
     if (!item) return
 
@@ -413,6 +421,7 @@ const [useJob, setUseJob] = useState("")
       .insert([
         {
           item_id: itemId,
+          user_id: user.id,
           job_name: jobName,
           quantity_used: qty,
         },

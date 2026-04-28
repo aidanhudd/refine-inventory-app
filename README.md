@@ -35,3 +35,14 @@ Examples:
 - pallet
 
 Upload these files to your GitHub repo root, then redeploy on Vercel.
+
+## Supabase Auth + inventory usage ownership
+
+Apply this migration to add `inventory_usage.user_id` and RLS owner policies:
+
+- `supabase/migrations/20260428_inventory_usage_user_auth.sql`
+
+You can apply it in either of these ways:
+
+1. Supabase Dashboard -> SQL Editor -> paste file contents -> Run.
+2. Supabase CLI -> run `supabase db push` from project root (after linking your Supabase project).

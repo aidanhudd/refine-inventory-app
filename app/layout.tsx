@@ -1,5 +1,6 @@
 import './globals.css'
-import NavBar from './components/NavBar'
+import AppShell from './components/AppShell'
+import { AuthProvider } from './components/AuthProvider'
 
 export const metadata = {
   title: 'Refine Inventory',
@@ -10,18 +11,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <div className="app-header-shell">
-          <header className="topbar app-header">
-            <div className="app-brand">
-              <img src="/logo.png" alt="Refine Kitchen & Bath Logo" className="app-logo" />
-              <div>
-                <h1 className="app-title">Warehouse Inventory</h1>
-              </div>
-            </div>
-            <NavBar />
-          </header>
-        </div>
-        {children}
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   )
