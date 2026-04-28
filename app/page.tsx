@@ -979,6 +979,43 @@ const [useJob, setUseJob] = useState("")
                       </div>
                     )}
 
+                    <div className="action-row">
+                      {isInlineEditing ? (
+                        <>
+                          <button className="btn-primary btn-small" disabled={inlineSaving} onClick={() => saveInlineEdit(item)}>
+                            {inlineSaving ? "Saving..." : "Save"}
+                          </button>
+                          <button className="btn-secondary btn-small" disabled={inlineSaving} onClick={cancelInlineEdit}>
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button className="btn-edit btn-small" onClick={() => startInlineEdit(item)}>
+                            Edit
+                          </button>
+                        </>
+                      )}
+
+                      <button className="btn-secondary btn-small" onClick={() => markSold(item.id)}>
+                        Mark Sold
+                      </button>
+
+                      <button className="btn-danger btn-small" onClick={() => deleteItem(item.id)}>
+                        Delete
+                      </button>
+
+                      <button
+  className="btn-secondary btn-small"
+  onClick={() => {
+    setSelectedItem(item)
+    setUseModalOpen(true)
+  }}
+>
+  Use
+</button>
+                    </div>
+
                     <div className="section-gap">
                       <label>Add More Photos</label>
 
@@ -1063,43 +1100,6 @@ const [useJob, setUseJob] = useState("")
                           })}
                         </div>
                       )}
-                    </div>
-
-                    <div className="action-row">
-                      {isInlineEditing ? (
-                        <>
-                          <button className="btn-primary btn-small" disabled={inlineSaving} onClick={() => saveInlineEdit(item)}>
-                            {inlineSaving ? "Saving..." : "Save"}
-                          </button>
-                          <button className="btn-secondary btn-small" disabled={inlineSaving} onClick={cancelInlineEdit}>
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button className="btn-edit btn-small" onClick={() => startInlineEdit(item)}>
-                            Edit
-                          </button>
-                        </>
-                      )}
-
-                      <button className="btn-secondary btn-small" onClick={() => markSold(item.id)}>
-                        Mark Sold
-                      </button>
-
-                      <button className="btn-danger btn-small" onClick={() => deleteItem(item.id)}>
-                        Delete
-                      </button>
-
-                      <button
-  className="btn-secondary btn-small"
-  onClick={() => {
-    setSelectedItem(item)
-    setUseModalOpen(true)
-  }}
->
-  Use
-</button>
                     </div>
                   </div>
                 )
