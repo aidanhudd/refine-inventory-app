@@ -193,10 +193,6 @@ const [useJob, setUseJob] = useState("")
     return items.filter((item) => (item.status || "").toLowerCase() === "sold").length
   }, [items])
 
-  const lowStockCount = useMemo(() => {
-    return items.filter((item) => Number(item.quantity_on_hand || 0) <= 3).length
-  }, [items])
-
   const jobEntries = useMemo(() => {
     const grouped: Record<string, UsageRow[]> = {}
 
@@ -575,10 +571,6 @@ const [useJob, setUseJob] = useState("")
         <div className="stat">
           <div className="stat-label">Inventory Value</div>
           <div className="stat-value">${Math.round(totalValue).toLocaleString()}</div>
-        </div>
-        <div className="stat">
-          <div className="stat-label">Low Stock</div>
-          <div className="stat-value">{lowStockCount}</div>
         </div>
         <div className="stat">
           <div className="stat-label">Sold</div>
