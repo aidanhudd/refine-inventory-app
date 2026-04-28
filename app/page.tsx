@@ -861,7 +861,16 @@ const [useJob, setUseJob] = useState("")
                       </div>
                       <div className="item-price">
                         <div className="small" style={{ marginTop: 0 }}>Unit Cost</div>
-                        <strong>{formatCurrency(Number(item.unit_cost || 0))}</strong>
+                        {isInlineEditing ? (
+                          <input
+                            className="inline-input"
+                            type="number"
+                            value={inlineDraft.unit_cost}
+                            onChange={(e) => updateInlineDraft("unit_cost", e.target.value)}
+                          />
+                        ) : (
+                          <strong>{formatCurrency(Number(item.unit_cost || 0))}</strong>
+                        )}
                       </div>
                     </div>
 
@@ -1070,9 +1079,6 @@ const [useJob, setUseJob] = useState("")
                         <>
                           <button className="btn-edit btn-small" onClick={() => startInlineEdit(item)}>
                             Edit
-                          </button>
-                          <button className="btn-secondary btn-small" onClick={() => startEdit(item)}>
-                            Edit in Form
                           </button>
                         </>
                       )}
