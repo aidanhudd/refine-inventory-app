@@ -52,6 +52,24 @@ const defaultForm = {
   status: "active",
 }
 
+const getActionableSupabaseError = (message: string) => {
+  const lower = message.toLowerCase()
+
+  if (lower.includes("column") && lower.includes("user_id")) {
+    return "Database migration missing: run supabase/migrations/20260428_inventory_usage_user_auth.sql in Supabase SQL Editor, then retry."
+  }
+
+  if (lower.includes("row-level security")) {
+    return "Permission blocked by Supabase RLS. Confirm you are logged in and that inventory_usage policies are applied."
+  }
+
+  if (lower.includes("permission denied") && lower.includes("inventory_items")) {
+    return "Permission denied on inventory_items update. Check RLS/table permissions for authenticated users."
+  }
+
+  return message
+}
+
 export default function Home() {
   const { user } = useAuth()
   const [items, setItems] = useState<InventoryItem[]>([])
@@ -430,7 +448,7 @@ const [useJob, setUseJob] = useState("")
       .single()
 
     if (usageError || !insertedUsage) {
-      setErrorMessage(usageError?.message || "Failed to record usage.")
+      setErrorMessage(getActionableSupabaseError(usageError?.message || "Failed to record usage."))
       return
     }
 
@@ -442,7 +460,7 @@ const [useJob, setUseJob] = useState("")
       .eq("id", itemId)
 
     if (updateError) {
-      setErrorMessage(updateError.message)
+      setErrorMessage(getActionableSupabaseError(updateError.message))
       return
     }
 
