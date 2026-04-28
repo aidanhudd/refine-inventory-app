@@ -754,6 +754,7 @@ const [useJob, setUseJob] = useState("")
                 const categoryName = item.category_id ? categoryNameById.get(item.category_id) : ""
                 const qty = Number(item.quantity_on_hand || 0)
                 const itemTotalValue = qty * Number(item.unit_cost || 0)
+                const statusLabel = (item.status || "active").replace(/_/g, " ")
                 const photos = photoMap[item.id] || []
                 const itemUsage = usageList.filter((u) => u.item_id === item.id).slice(0, 5)
 
@@ -764,37 +765,44 @@ const [useJob, setUseJob] = useState("")
                         <div className="item-name">{item.product_name || "Untitled Item"}</div>
                         <div className="badges">
                           {categoryName && <span className="badge">{categoryName}</span>}
-                          {item.status && (
-                            <span className="badge">
-                              {item.status}
-                            </span>
-                          )}
+                          <span className="badge">{item.sku || "No SKU"}</span>
                         </div>
                       </div>
-                      <div>
-                        <strong>${Number(item.unit_cost || 0).toLocaleString()}</strong>
+                      <div className="item-price">
+                        <div className="small" style={{ marginTop: 0 }}>Unit Cost</div>
+                        <strong>{formatCurrency(Number(item.unit_cost || 0))}</strong>
+                      </div>
+                    </div>
+
+                    <div className="item-kpis">
+                      <div className="item-kpi">
+                        <div className="item-kpi-label">Quantity on Hand</div>
+                        <div className="item-kpi-value">
+                          {qty} <span className="item-kpi-unit">{item.quantity_type || ""}</span>
+                        </div>
+                      </div>
+                      <div className="item-kpi item-kpi-status">
+                        <div className="item-kpi-label">Stock Status</div>
+                        <div className="item-kpi-value item-status-text">{statusLabel}</div>
                       </div>
                     </div>
 
                     <div className="meta-grid">
-                      <div>
-                        <strong>SKU:</strong> {item.sku || "—"}
-                      </div>
-                      <div>
-                        <strong>Quantity:</strong> {qty} {item.quantity_type || ""}
-                      </div>
                       <div>
                         <strong>Total Value:</strong> {formatCurrency(itemTotalValue)}
                       </div>
                       <div>
                         <strong>Location:</strong> {item.warehouse_location || "—"}
                       </div>
+                    </div>
+
+                    <div className="meta-grid meta-grid-secondary section-gap">
                       <div>
                         <strong>Created:</strong>{" "}
                         {item.created_at ? new Date(item.created_at).toLocaleDateString() : "—"}
                       </div>
                       <div>
-                        <strong>Notes:</strong> {item.notes || "—"}
+                        <strong>Notes:</strong> {item.notes || "No notes"}
                       </div>
                     </div>
 
