@@ -753,9 +753,7 @@ const [useJob, setUseJob] = useState("")
                         <div className="badges">
                           {categoryName && <span className="badge">{categoryName}</span>}
                           {item.status && (
-                            <span
-                              className={qty <= 3 || item.status === "low_stock" ? "badge badge-alert" : "badge"}
-                            >
+                            <span className="badge">
                               {item.status}
                             </span>
                           )}
