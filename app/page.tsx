@@ -599,9 +599,6 @@ const [useJob, setUseJob] = useState("")
             </div>
           )}
 
-          <div className="notice">
-            Photos use the <strong>inventory-photos</strong> bucket.
-          </div>
 
           {message && <div className="success">{message}</div>}
           {errorMessage && <div className="notice">{errorMessage}</div>}
