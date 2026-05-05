@@ -105,7 +105,18 @@ button:focus-visible {
 .stat-label { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
 .stat-value { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
 
-.toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  position: sticky;
+  top: 86px;
+  z-index: 12;
+  background: color-mix(in srgb, var(--bg) 84%, transparent);
+  backdrop-filter: blur(6px);
+  padding: 8px 0;
+}
 .toolbar .search { flex: 1; min-width: 220px; }
 .category-picker-card {
   background: var(--card);
@@ -292,6 +303,7 @@ button:focus-visible {
 @media (max-width: 900px) {
   .app-header { align-items: flex-start; }
   .app-header-shell { position: static; }
+  .toolbar { top: 0; }
   .topbar { flex-wrap: wrap; }
   .app-brand { width: 100%; }
   .nav-links { width: 100%; justify-content: flex-start; }
