@@ -80,6 +80,17 @@ const getActionableSupabaseError = (message: string) => {
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: "currency", currency: "USD" })
 
+const getCategoryIcon = (categoryName: string) => {
+  const normalized = categoryName.toLowerCase()
+  if (normalized.includes("cabinet")) return "▦"
+  if (normalized.includes("quartz") || normalized.includes("granite") || normalized.includes("stone")) return "⬢"
+  if (normalized.includes("tile")) return "◫"
+  if (normalized.includes("floor") || normalized.includes("lvp") || normalized.includes("spc")) return "▤"
+  if (normalized.includes("tool") || normalized.includes("saw")) return "🛠"
+  if (normalized.includes("paint") || normalized.includes("finish")) return "◉"
+  return "◌"
+}
+
 export default function Home() {
   const { user } = useAuth()
   const [items, setItems] = useState<InventoryItem[]>([])
@@ -203,6 +214,15 @@ const [useJob, setUseJob] = useState("")
     if (categoryFilter === "all") return "All Inventory"
     return categoryNameById.get(categoryFilter) || ""
   }, [categoryFilter, categoryNameById])
+
+  const itemCountsByCategory = useMemo(() => {
+    const counts = new Map<string, number>()
+    items.forEach((item) => {
+      if (!item.category_id) return
+      counts.set(item.category_id, (counts.get(item.category_id) || 0) + 1)
+    })
+    return counts
+  }, [items])
 
   const totalValue = useMemo(() => {
     return items.reduce((sum, item) => {
@@ -809,24 +829,6 @@ const [useJob, setUseJob] = useState("")
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-
-            <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-              <option value="all">All categories</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </select>
-
-            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="all">All statuses</option>
-              <option value="active">active</option>
-              <option value="low_stock">low_stock</option>
-              <option value="reserved">reserved</option>
-              <option value="damaged">damaged</option>
-              <option value="sold">sold</option>
-            </select>
           </div>
 
           <div className="category-picker-card">
@@ -843,7 +845,13 @@ const [useJob, setUseJob] = useState("")
                 className={`category-chip ${categoryFilter === "all" ? "category-chip-active" : ""}`}
                 onClick={() => setCategoryFilter("all")}
               >
-                View All Inventory
+                <span className="category-chip-icon" aria-hidden>
+                  ◍
+                </span>
+                <span className="category-chip-content">
+                  <span className="category-chip-label">View All Inventory</span>
+                  <span className="category-chip-meta">{items.length} item{items.length === 1 ? "" : "s"}</span>
+                </span>
               </button>
 
               {categories.map((cat) => (
@@ -853,7 +861,16 @@ const [useJob, setUseJob] = useState("")
                   className={`category-chip ${categoryFilter === cat.id ? "category-chip-active" : ""}`}
                   onClick={() => setCategoryFilter(cat.id)}
                 >
-                  {cat.name}
+                  <span className="category-chip-icon" aria-hidden>
+                    {getCategoryIcon(cat.name)}
+                  </span>
+                  <span className="category-chip-content">
+                    <span className="category-chip-label">{cat.name}</span>
+                    <span className="category-chip-meta">
+                      {itemCountsByCategory.get(cat.id) || 0} item
+                      {(itemCountsByCategory.get(cat.id) || 0) === 1 ? "" : "s"}
+                    </span>
+                  </span>
                 </button>
               ))}
             </div>
