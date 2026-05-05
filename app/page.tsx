@@ -90,7 +90,7 @@ export default function Home() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [categoryFilter, setCategoryFilter] = useState("")
   const [jobSearch, setJobSearch] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -193,6 +193,16 @@ const [useJob, setUseJob] = useState("")
       return matchesSearch && matchesStatus && matchesCategory
     })
   }, [items, search, statusFilter, categoryFilter, categoryNameById])
+
+  const hasSelectedInventoryView = useMemo(() => {
+    if (categoryFilter === "all") return true
+    return categories.some((category) => category.id === categoryFilter)
+  }, [categoryFilter, categories])
+
+  const selectedCategoryName = useMemo(() => {
+    if (categoryFilter === "all") return "All Inventory"
+    return categoryNameById.get(categoryFilter) || ""
+  }, [categoryFilter, categoryNameById])
 
   const totalValue = useMemo(() => {
     return items.reduce((sum, item) => {
@@ -819,10 +829,44 @@ const [useJob, setUseJob] = useState("")
             </select>
           </div>
 
+          <div className="category-picker-card">
+            <div className="category-picker-header">
+              <h3>Choose a category</h3>
+              <p className="subtext">
+                Start by selecting a category to view matching inventory, or choose all inventory.
+              </p>
+            </div>
+
+            <div className="category-grid">
+              <button
+                type="button"
+                className={`category-chip ${categoryFilter === "all" ? "category-chip-active" : ""}`}
+                onClick={() => setCategoryFilter("all")}
+              >
+                View All Inventory
+              </button>
+
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  type="button"
+                  className={`category-chip ${categoryFilter === cat.id ? "category-chip-active" : ""}`}
+                  onClick={() => setCategoryFilter(cat.id)}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {loading ? (
             <div className="empty">Loading inventory...</div>
+          ) : !hasSelectedInventoryView ? (
+            <div className="empty">Select a category above to start browsing inventory.</div>
           ) : filteredItems.length === 0 ? (
-            <div className="empty">No inventory items yet. Add your first item on the left.</div>
+            <div className="empty">
+              No items found in {selectedCategoryName || "this view"}. Try another category or refine your filters.
+            </div>
           ) : (
             <div className="list">
               {filteredItems.map((item) => {

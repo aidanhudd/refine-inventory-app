@@ -107,6 +107,43 @@ button:focus-visible {
 
 .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
 .toolbar .search { flex: 1; min-width: 220px; }
+.category-picker-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px;
+  margin-bottom: 16px;
+  box-shadow: var(--card-shadow);
+}
+.category-picker-header { margin-bottom: 12px; }
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+.category-chip {
+  border: 1px solid var(--line);
+  background: var(--badge-bg);
+  color: var(--text);
+  border-radius: 14px;
+  min-height: 52px;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 700;
+}
+.category-chip:hover {
+  border-color: #98a2b3;
+  background: color-mix(in srgb, var(--accent) 45%, var(--card));
+}
+.category-chip-active {
+  background: var(--accent);
+  border-color: #c7d2fe;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+.category-chip-active:hover {
+  border-color: #a4bcfd;
+  background: color-mix(in srgb, var(--accent) 72%, var(--card));
+}
 .list { display: grid; gap: 14px; }
 .item-card {
   background: var(--card);
