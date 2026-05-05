@@ -80,17 +80,6 @@ const getActionableSupabaseError = (message: string) => {
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: "currency", currency: "USD" })
 
-const getCategoryIcon = (categoryName: string) => {
-  const normalized = categoryName.toLowerCase()
-  if (normalized.includes("cabinet")) return "▦"
-  if (normalized.includes("quartz") || normalized.includes("granite") || normalized.includes("stone")) return "⬢"
-  if (normalized.includes("tile")) return "◫"
-  if (normalized.includes("floor") || normalized.includes("lvp") || normalized.includes("spc")) return "▤"
-  if (normalized.includes("tool") || normalized.includes("saw")) return "🛠"
-  if (normalized.includes("paint") || normalized.includes("finish")) return "◉"
-  return "◌"
-}
-
 export default function Home() {
   const { user } = useAuth()
   const [items, setItems] = useState<InventoryItem[]>([])
@@ -845,9 +834,6 @@ const [useJob, setUseJob] = useState("")
                 className={`category-chip ${categoryFilter === "all" ? "category-chip-active" : ""}`}
                 onClick={() => setCategoryFilter("all")}
               >
-                <span className="category-chip-icon" aria-hidden>
-                  ◍
-                </span>
                 <span className="category-chip-content">
                   <span className="category-chip-label">View All Inventory</span>
                   <span className="category-chip-meta">{items.length} item{items.length === 1 ? "" : "s"}</span>
@@ -861,9 +847,6 @@ const [useJob, setUseJob] = useState("")
                   className={`category-chip ${categoryFilter === cat.id ? "category-chip-active" : ""}`}
                   onClick={() => setCategoryFilter(cat.id)}
                 >
-                  <span className="category-chip-icon" aria-hidden>
-                    {getCategoryIcon(cat.name)}
-                  </span>
                   <span className="category-chip-content">
                     <span className="category-chip-label">{cat.name}</span>
                     <span className="category-chip-meta">
