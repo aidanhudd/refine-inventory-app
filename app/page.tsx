@@ -47,6 +47,11 @@ type InlineEditForm = {
   notes: string
 }
 
+type SoldUndoSnapshot = {
+  status: string
+  quantity_on_hand: number
+}
+
 const defaultForm = {
   sku: "",
   product_name: "",
@@ -107,6 +112,7 @@ const [useJob, setUseJob] = useState("")
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null)
   const [inlineDraft, setInlineDraft] = useState<InlineEditForm | null>(null)
   const [inlineSaving, setInlineSaving] = useState(false)
+  const [soldUndoMap, setSoldUndoMap] = useState<Record<string, SoldUndoSnapshot>>({})
   useEffect(() => {
     loadAll()
   }, [])
@@ -614,6 +620,9 @@ const [useJob, setUseJob] = useState("")
     setErrorMessage("")
     setMessage("")
 
+    const itemToMark = items.find((item) => item.id === id)
+    if (!itemToMark) return
+
     const { error } = await supabase
       .from("inventory_items")
       .update({ status: "sold", quantity_on_hand: 0 })
@@ -632,10 +641,64 @@ const [useJob, setUseJob] = useState("")
       }))
     }
 
+    setSoldUndoMap((prev) => ({
+      ...prev,
+      [id]: {
+        status: itemToMark.status || "active",
+        quantity_on_hand: Number(itemToMark.quantity_on_hand || 0),
+      },
+    }))
+
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, status: "sold", quantity_on_hand: 0 } : item))
     )
     setMessage("Item marked as sold.")
+  }
+
+  const undoMarkSold = async (id: string) => {
+    setErrorMessage("")
+    setMessage("")
+
+    const snapshot = soldUndoMap[id]
+    if (!snapshot) {
+      setErrorMessage("No recent sold action to undo for this item.")
+      return
+    }
+
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({
+        status: snapshot.status,
+        quantity_on_hand: snapshot.quantity_on_hand,
+      })
+      .eq("id", id)
+
+    if (error) {
+      setErrorMessage(error.message)
+      return
+    }
+
+    if (editingId === id) {
+      setForm((prev) => ({
+        ...prev,
+        status: snapshot.status,
+        quantity_on_hand: String(snapshot.quantity_on_hand),
+      }))
+    }
+
+    setItems((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, status: snapshot.status, quantity_on_hand: snapshot.quantity_on_hand }
+          : item
+      )
+    )
+    setSoldUndoMap((prev) => {
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+    setMessage("Mark sold undone.")
   }
 
   const uploadMorePhotos = async (itemId: string, e: ChangeEvent<HTMLInputElement>) => {
@@ -935,17 +998,7 @@ const [useJob, setUseJob] = useState("")
                         )}
                       </div>
                       <div className="item-kpi item-kpi-status">
-                        <div className="item-kpi-label">Stock Status</div>
-                        <div className="item-kpi-value item-status-text">{statusLabel}</div>
-                      </div>
-                    </div>
-
-                    <div className="meta-grid">
-                      <div>
-                        <strong>Total Value:</strong> {formatCurrency(displayTotalValue)}
-                      </div>
-                      <div>
-                        <strong>Location:</strong>{" "}
+                        <div className="item-kpi-label">Location</div>
                         {isInlineEditing ? (
                           <input
                             className="inline-input"
@@ -954,8 +1007,17 @@ const [useJob, setUseJob] = useState("")
                             placeholder="Warehouse location"
                           />
                         ) : (
-                          displayLocation
+                          <div className="item-kpi-value item-status-text">{displayLocation}</div>
                         )}
+                      </div>
+                    </div>
+
+                    <div className="meta-grid">
+                      <div>
+                        <strong>Total Value:</strong> {formatCurrency(displayTotalValue)}
+                      </div>
+                      <div>
+                        <strong>Status:</strong> {statusLabel}
                       </div>
                     </div>
 
@@ -1114,6 +1176,11 @@ const [useJob, setUseJob] = useState("")
                       <button className="btn-secondary btn-small" onClick={() => markSold(item.id)}>
                         Mark Sold
                       </button>
+                      {isInlineEditing && soldUndoMap[item.id] && (
+                        <button className="btn-secondary btn-small" onClick={() => undoMarkSold(item.id)}>
+                          Undo Mark Sold
+                        </button>
+                      )}
 
                       <button className="btn-danger btn-small" onClick={() => deleteItem(item.id)}>
                         Delete
