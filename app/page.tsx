@@ -64,6 +64,8 @@ const defaultForm = {
   status: "active",
 }
 
+const SETTING_MATS_CATEGORY_NAME = "Setting Mats"
+
 const getActionableSupabaseError = (message: string) => {
   const lower = message.toLowerCase()
 
@@ -113,6 +115,7 @@ const [useJob, setUseJob] = useState("")
   const [inlineDraft, setInlineDraft] = useState<InlineEditForm | null>(null)
   const [inlineSaving, setInlineSaving] = useState(false)
   const [soldUndoMap, setSoldUndoMap] = useState<Record<string, SoldUndoSnapshot>>({})
+  const [settingMatsBootstrapping, setSettingMatsBootstrapping] = useState(false)
   useEffect(() => {
     loadAll()
   }, [])
@@ -147,6 +150,34 @@ const [useJob, setUseJob] = useState("")
 
     await loadPhotosForItems(loadedItems)
     setLoading(false)
+  }
+
+  const settingMatsCategory = useMemo(
+    () =>
+      categories.find((c) => c.name.trim().toLowerCase() === SETTING_MATS_CATEGORY_NAME.toLowerCase()) ?? null,
+    [categories],
+  )
+
+  const handleSettingMatsCategory = async () => {
+    if (settingMatsCategory) {
+      setCategoryFilter(settingMatsCategory.id)
+      return
+    }
+    setSettingMatsBootstrapping(true)
+    setErrorMessage("")
+    const { data, error } = await supabase
+      .from("categories")
+      .insert({ name: SETTING_MATS_CATEGORY_NAME })
+      .select("id")
+      .single()
+    if (error) {
+      setErrorMessage(getActionableSupabaseError(error.message))
+      setSettingMatsBootstrapping(false)
+      return
+    }
+    await loadAll()
+    if (data?.id) setCategoryFilter(data.id)
+    setSettingMatsBootstrapping(false)
   }
 
   const loadPhotosForItems = async (loadedItems: InventoryItem[]) => {
@@ -919,6 +950,22 @@ const [useJob, setUseJob] = useState("")
                   </span>
                 </button>
               ))}
+
+              {!settingMatsCategory && (
+                <button
+                  type="button"
+                  className="category-chip category-chip-add"
+                  disabled={settingMatsBootstrapping || loading}
+                  onClick={() => void handleSettingMatsCategory()}
+                >
+                  <span className="category-chip-content">
+                    <span className="category-chip-label">{SETTING_MATS_CATEGORY_NAME}</span>
+                    <span className="category-chip-meta">
+                      {settingMatsBootstrapping ? "Adding…" : "Setting materials — click to add category"}
+                    </span>
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 

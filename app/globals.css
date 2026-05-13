@@ -166,6 +166,16 @@ button:focus-visible {
   border-color: #a4bcfd;
   background: color-mix(in srgb, var(--accent) 82%, var(--card));
 }
+.category-chip-add {
+  border-style: dashed;
+}
+.category-chip-add:hover:not(:disabled) {
+  border-style: solid;
+}
+.category-chip-add:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
 .category-chip-content {
   display: grid;
   gap: 5px;
