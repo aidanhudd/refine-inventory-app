@@ -9,6 +9,12 @@ type Category = {
   name: string
 }
 
+type Subcategory = {
+  id: string
+  category_id: string
+  name: string
+}
+
 type QuantityType = {
   id: string
   name: string
@@ -19,6 +25,7 @@ type InventoryItem = {
   sku: string | null
   product_name: string | null
   category_id: string | null
+  subcategory_id: string | null
   quantity_on_hand: number | null
   quantity_type: string | null
   unit_cost: number | null
@@ -56,6 +63,7 @@ const defaultForm = {
   sku: "",
   product_name: "",
   category_id: "",
+  subcategory_id: "",
   quantity_on_hand: "1",
   quantity_type: "",
   unit_cost: "",
@@ -71,6 +79,10 @@ const getActionableSupabaseError = (message: string) => {
 
   if (lower.includes("column") && lower.includes("user_id")) {
     return "Database migration missing: run supabase/migrations/20260428_inventory_usage_user_auth.sql in Supabase SQL Editor, then retry."
+  }
+
+  if (lower.includes("subcategor") || (lower.includes("column") && lower.includes("subcategory_id"))) {
+    return "Database migration missing: run supabase/migrations/20260519_inventory_subcategories.sql in Supabase SQL Editor, then retry."
   }
 
   if (lower.includes("row-level security")) {
@@ -91,6 +103,7 @@ export default function Home() {
   const { user } = useAuth()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([])
   const [quantityTypes, setQuantityTypes] = useState<QuantityType[]>([])
   const [usageList, setUsageList] = useState<UsageRow[]>([])
   const [form, setForm] = useState(defaultForm)
@@ -98,6 +111,7 @@ export default function Home() {
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("")
+  const [subcategoryFilter, setSubcategoryFilter] = useState("")
   const [jobSearch, setJobSearch] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -124,21 +138,24 @@ const [useJob, setUseJob] = useState("")
     setLoading(true)
     setErrorMessage("")
 
-    const [itemsRes, categoriesRes, quantityTypesRes, usageRes] = await Promise.all([
+    const [itemsRes, categoriesRes, subcategoriesRes, quantityTypesRes, usageRes] = await Promise.all([
       supabase.from("inventory_items").select("*").order("created_at", { ascending: false }),
       supabase.from("categories").select("*").order("name", { ascending: true }),
+      supabase.from("subcategories").select("*").order("name", { ascending: true }),
       supabase.from("quantity_types").select("*").order("name", { ascending: true }),
       supabase.from("inventory_usage").select("*").order("used_at", { ascending: false }),
     ])
 
-    if (itemsRes.error) setErrorMessage(itemsRes.error.message)
+    if (itemsRes.error) setErrorMessage(getActionableSupabaseError(itemsRes.error.message))
     if (categoriesRes.error) setErrorMessage(categoriesRes.error.message)
+    if (subcategoriesRes.error) setErrorMessage(getActionableSupabaseError(subcategoriesRes.error.message))
     if (quantityTypesRes.error) setErrorMessage(quantityTypesRes.error.message)
     if (usageRes.error) setErrorMessage(usageRes.error.message)
 
     const loadedItems = itemsRes.data || []
     setItems(loadedItems)
     setCategories(categoriesRes.data || [])
+    setSubcategories(subcategoriesRes.data || [])
     setQuantityTypes(quantityTypesRes.data || [])
     setUsageList((usageRes.data as UsageRow[]) || [])
 
@@ -158,9 +175,14 @@ const [useJob, setUseJob] = useState("")
     [categories],
   )
 
+  const selectCategory = (id: string) => {
+    setCategoryFilter(id)
+    setSubcategoryFilter("")
+  }
+
   const handleSettingMatsCategory = async () => {
     if (settingMatsCategory) {
-      setCategoryFilter(settingMatsCategory.id)
+      selectCategory(settingMatsCategory.id)
       return
     }
     setSettingMatsBootstrapping(true)
@@ -176,7 +198,7 @@ const [useJob, setUseJob] = useState("")
       return
     }
     await loadAll()
-    if (data?.id) setCategoryFilter(data.id)
+    if (data?.id) selectCategory(data.id)
     setSettingMatsBootstrapping(false)
   }
 
@@ -208,13 +230,31 @@ const [useJob, setUseJob] = useState("")
     return map
   }, [categories])
 
+  const subcategoryNameById = useMemo(() => {
+    const map = new Map<string, string>()
+    subcategories.forEach((sub) => map.set(sub.id, sub.name))
+    return map
+  }, [subcategories])
+
+  const subcategoriesInView = useMemo(() => {
+    if (categoryFilter === "all" || !categoryFilter) return []
+    return subcategories.filter((sub) => sub.category_id === categoryFilter)
+  }, [subcategories, categoryFilter])
+
+  const formSubcategories = useMemo(() => {
+    if (!form.category_id) return []
+    return subcategories.filter((sub) => sub.category_id === form.category_id)
+  }, [subcategories, form.category_id])
+
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const categoryName = item.category_id ? categoryNameById.get(item.category_id) || "" : ""
+      const subcategoryName = item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) || "" : ""
       const haystack = [
         item.sku || "",
         item.product_name || "",
         categoryName,
+        subcategoryName,
         item.quantity_type || "",
         item.warehouse_location || "",
         item.notes || "",
@@ -226,10 +266,23 @@ const [useJob, setUseJob] = useState("")
       const matchesSearch = !search || haystack.includes(search.toLowerCase())
       const matchesStatus = statusFilter === "all" || (item.status || "").toLowerCase() === statusFilter
       const matchesCategory = categoryFilter === "all" || item.category_id === categoryFilter
+      const matchesSubcategory = (() => {
+        if (categoryFilter === "all" || !subcategoryFilter) return true
+        if (subcategoryFilter === "none") return !item.subcategory_id
+        return item.subcategory_id === subcategoryFilter
+      })()
 
-      return matchesSearch && matchesStatus && matchesCategory
+      return matchesSearch && matchesStatus && matchesCategory && matchesSubcategory
     })
-  }, [items, search, statusFilter, categoryFilter, categoryNameById])
+  }, [
+    items,
+    search,
+    statusFilter,
+    categoryFilter,
+    subcategoryFilter,
+    categoryNameById,
+    subcategoryNameById,
+  ])
 
   const hasSelectedInventoryView = useMemo(() => {
     if (categoryFilter === "all") return true
@@ -241,6 +294,14 @@ const [useJob, setUseJob] = useState("")
     return categoryNameById.get(categoryFilter) || ""
   }, [categoryFilter, categoryNameById])
 
+  const selectedViewLabel = useMemo(() => {
+    if (categoryFilter === "all") return selectedCategoryName
+    if (!subcategoryFilter) return selectedCategoryName
+    if (subcategoryFilter === "none") return `${selectedCategoryName} (no subcategory)`
+    const subName = subcategoryNameById.get(subcategoryFilter)
+    return subName ? `${selectedCategoryName} › ${subName}` : selectedCategoryName
+  }, [categoryFilter, subcategoryFilter, selectedCategoryName, subcategoryNameById])
+
   const itemCountsByCategory = useMemo(() => {
     const counts = new Map<string, number>()
     items.forEach((item) => {
@@ -249,6 +310,22 @@ const [useJob, setUseJob] = useState("")
     })
     return counts
   }, [items])
+
+  const itemCountsBySubcategory = useMemo(() => {
+    const counts = new Map<string, number>()
+    if (categoryFilter === "all" || !categoryFilter) return counts
+
+    items.forEach((item) => {
+      if (item.category_id !== categoryFilter || !item.subcategory_id) return
+      counts.set(item.subcategory_id, (counts.get(item.subcategory_id) || 0) + 1)
+    })
+    return counts
+  }, [items, categoryFilter])
+
+  const uncategorizedCountInView = useMemo(() => {
+    if (categoryFilter === "all" || !categoryFilter) return 0
+    return items.filter((item) => item.category_id === categoryFilter && !item.subcategory_id).length
+  }, [items, categoryFilter])
 
   const totalValue = useMemo(() => {
     return items.reduce((sum, item) => {
@@ -283,7 +360,16 @@ const [useJob, setUseJob] = useState("")
   }, [usageList, jobSearch])
 
   const handleChange = (key: string, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
+    setForm((prev) => {
+      const next = { ...prev, [key]: value }
+      if (key === "category_id") {
+        const subcategoryStillValid = subcategories.some(
+          (sub) => sub.id === prev.subcategory_id && sub.category_id === value,
+        )
+        if (!subcategoryStillValid) next.subcategory_id = ""
+      }
+      return next
+    })
   }
 
   const resetForm = () => {
@@ -292,6 +378,7 @@ const [useJob, setUseJob] = useState("")
     setForm({
       ...defaultForm,
       category_id: categories[0]?.id || "",
+      subcategory_id: "",
       quantity_type: quantityTypes[0]?.name || "",
     })
   }
@@ -353,6 +440,7 @@ const [useJob, setUseJob] = useState("")
       sku: form.sku || null,
       product_name: form.product_name,
       category_id: form.category_id || null,
+      subcategory_id: form.subcategory_id || null,
       quantity_on_hand: Number(form.quantity_on_hand || 0),
       quantity_type: form.quantity_type || null,
       unit_cost: Number(form.unit_cost || 0),
@@ -442,6 +530,7 @@ const [useJob, setUseJob] = useState("")
       sku: item.sku || "",
       product_name: item.product_name || "",
       category_id: item.category_id || "",
+      subcategory_id: item.subcategory_id || "",
       quantity_on_hand: String(item.quantity_on_hand ?? 0),
       quantity_type: item.quantity_type || "",
       unit_cost: String(item.unit_cost ?? 0),
@@ -824,6 +913,25 @@ const [useJob, setUseJob] = useState("")
             </div>
 
             <div className="field">
+              <label>Subcategory (optional)</label>
+              <select
+                value={form.subcategory_id}
+                onChange={(e) => handleChange("subcategory_id", e.target.value)}
+                disabled={!form.category_id}
+              >
+                <option value="">None</option>
+                {formSubcategories.map((sub) => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.name}
+                  </option>
+                ))}
+              </select>
+              {form.category_id && formSubcategories.length === 0 && (
+                <div className="small">No subcategories for this category yet.</div>
+              )}
+            </div>
+
+            <div className="field">
               <label>Quantity</label>
               <input
                 type="number"
@@ -908,7 +1016,7 @@ const [useJob, setUseJob] = useState("")
           <div className="toolbar">
             <input
               className="search"
-              placeholder="Search name, SKU, category, location, notes..."
+              placeholder="Search name, SKU, category, subcategory, location, notes..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -926,7 +1034,7 @@ const [useJob, setUseJob] = useState("")
               <button
                 type="button"
                 className={`category-chip ${categoryFilter === "all" ? "category-chip-active" : ""}`}
-                onClick={() => setCategoryFilter("all")}
+                onClick={() => selectCategory("all")}
               >
                 <span className="category-chip-content">
                   <span className="category-chip-label">View All Inventory</span>
@@ -939,7 +1047,7 @@ const [useJob, setUseJob] = useState("")
                   key={cat.id}
                   type="button"
                   className={`category-chip ${categoryFilter === cat.id ? "category-chip-active" : ""}`}
-                  onClick={() => setCategoryFilter(cat.id)}
+                  onClick={() => selectCategory(cat.id)}
                 >
                   <span className="category-chip-content">
                     <span className="category-chip-label">{cat.name}</span>
@@ -969,18 +1077,58 @@ const [useJob, setUseJob] = useState("")
             </div>
           </div>
 
+          {categoryFilter !== "all" && categoryFilter && (
+            <div className="subcategory-picker-card">
+              <div className="subcategory-picker-header">
+                <h4>Subcategory (optional)</h4>
+                <p className="subtext">
+                  Narrow {selectedCategoryName} inventory, or leave on &ldquo;All&rdquo; to see every item in this category.
+                </p>
+              </div>
+              <div className="subcategory-grid">
+                <button
+                  type="button"
+                  className={`category-chip subcategory-chip ${!subcategoryFilter ? "subcategory-chip-active" : ""}`}
+                  onClick={() => setSubcategoryFilter("")}
+                >
+                  All in {selectedCategoryName}
+                </button>
+                {uncategorizedCountInView > 0 && (
+                  <button
+                    type="button"
+                    className={`category-chip subcategory-chip ${subcategoryFilter === "none" ? "subcategory-chip-active" : ""}`}
+                    onClick={() => setSubcategoryFilter("none")}
+                  >
+                    No subcategory ({uncategorizedCountInView})
+                  </button>
+                )}
+                {subcategoriesInView.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    className={`category-chip subcategory-chip ${subcategoryFilter === sub.id ? "subcategory-chip-active" : ""}`}
+                    onClick={() => setSubcategoryFilter(sub.id)}
+                  >
+                    {sub.name} ({itemCountsBySubcategory.get(sub.id) || 0})
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {loading ? (
             <div className="empty">Loading inventory...</div>
           ) : !hasSelectedInventoryView ? (
             <div className="empty">Select a category above to start browsing inventory.</div>
           ) : filteredItems.length === 0 ? (
             <div className="empty">
-              No items found in {selectedCategoryName || "this view"}. Try another category or refine your filters.
+              No items found in {selectedViewLabel || "this view"}. Try another category or refine your filters.
             </div>
           ) : (
             <div className="list">
               {filteredItems.map((item) => {
                 const categoryName = item.category_id ? categoryNameById.get(item.category_id) : ""
+                const subcategoryName = item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) : ""
                 const qty = Number(item.quantity_on_hand || 0)
                 const itemTotalValue = qty * Number(item.unit_cost || 0)
                 const statusLabel = (item.status || "active").replace(/_/g, " ")
@@ -1010,6 +1158,7 @@ const [useJob, setUseJob] = useState("")
                         )}
                         <div className="badges">
                           {categoryName && <span className="badge">{categoryName}</span>}
+                          {subcategoryName && <span className="badge">{subcategoryName}</span>}
                           <span className="badge">{item.sku || "No SKU"}</span>
                         </div>
                       </div>

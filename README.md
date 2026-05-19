@@ -25,6 +25,14 @@ Examples:
 - Cabinets
 - Tile / Hardwood
 
+### subcategories
+Optional subdivisions within a category. Each row links to a parent category via `category_id`.
+
+Examples (under Cabinets):
+- Base Cabinets
+- Wall Cabinets
+- Vanities
+
 ### quantity_types
 Examples:
 - slab
@@ -41,6 +49,10 @@ Upload these files to your GitHub repo root, then redeploy on Vercel.
 Apply this migration to add `inventory_usage.user_id` and RLS owner policies:
 
 - `supabase/migrations/20260428_inventory_usage_user_auth.sql`
+
+Apply this migration to add subcategories and optional `inventory_items.subcategory_id`:
+
+- `supabase/migrations/20260519_inventory_subcategories.sql`
 
 You can apply it in either of these ways:
 

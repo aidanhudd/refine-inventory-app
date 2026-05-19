@@ -192,6 +192,51 @@ button:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+.subcategory-picker-card {
+  background: color-mix(in srgb, var(--badge-bg) 55%, var(--card));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin: -4px 0 18px;
+}
+.subcategory-picker-header {
+  margin-bottom: 10px;
+}
+.subcategory-picker-header h4 {
+  font-size: 15px;
+  letter-spacing: -0.01em;
+}
+.subcategory-picker-header .subtext {
+  margin-top: 4px;
+  font-size: 13px;
+}
+.subcategory-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.subcategory-chip {
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
+  border-radius: 999px;
+  min-height: auto;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: none;
+}
+.subcategory-chip:hover {
+  border-color: #b6becd;
+  background: color-mix(in srgb, var(--accent) 40%, var(--card));
+  box-shadow: none;
+  transform: none;
+}
+.subcategory-chip-active {
+  background: color-mix(in srgb, var(--accent) 65%, var(--card));
+  border-color: #a4bcfd;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent);
+}
 .list { display: grid; gap: 14px; }
 .item-card {
   background: var(--card);
