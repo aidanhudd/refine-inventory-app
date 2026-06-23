@@ -112,6 +112,7 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("")
   const [subcategoryFilter, setSubcategoryFilter] = useState("")
+  const [categoryPickerCollapsed, setCategoryPickerCollapsed] = useState(false)
   const [jobSearch, setJobSearch] = useState("")
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -295,12 +296,17 @@ const [useJob, setUseJob] = useState("")
   }, [categoryFilter, categoryNameById])
 
   const selectedViewLabel = useMemo(() => {
-    if (categoryFilter === "all") return selectedCategoryName
+    if (categoryFilter === "all") return "All Inventory"
     if (!subcategoryFilter) return selectedCategoryName
     if (subcategoryFilter === "none") return `${selectedCategoryName} (no subcategory)`
     const subName = subcategoryNameById.get(subcategoryFilter)
     return subName ? `${selectedCategoryName} › ${subName}` : selectedCategoryName
   }, [categoryFilter, subcategoryFilter, selectedCategoryName, subcategoryNameById])
+
+  const browseFilterSummary = useMemo(() => {
+    if (!categoryFilter) return "No category selected"
+    return selectedViewLabel
+  }, [categoryFilter, selectedViewLabel])
 
   const itemCountsByCategory = useMemo(() => {
     const counts = new Map<string, number>()
@@ -1022,62 +1028,86 @@ const [useJob, setUseJob] = useState("")
             />
           </div>
 
-          <div className="category-picker-card">
-            <div className="category-picker-header">
-              <h3>Choose a category</h3>
-              <p className="subtext">
-                Start by selecting a category to view matching inventory, or choose all inventory.
-              </p>
-            </div>
-
-            <div className="category-grid">
+          <div className={`category-picker-card ${categoryPickerCollapsed ? "category-picker-collapsed" : ""}`}>
+            <div className="category-picker-top">
+              <div className="category-picker-header">
+                <h3>{categoryPickerCollapsed ? "Category filter" : "Choose a category"}</h3>
+                {!categoryPickerCollapsed && (
+                  <p className="subtext">
+                    Start by selecting a category to view matching inventory, or choose all inventory.
+                  </p>
+                )}
+                {categoryPickerCollapsed && (
+                  <p className="category-picker-summary">
+                    <span className="category-picker-summary-label">{browseFilterSummary}</span>
+                    {hasSelectedInventoryView && (
+                      <span className="category-picker-summary-meta">
+                        {filteredItems.length} item{filteredItems.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
               <button
                 type="button"
-                className={`category-chip ${categoryFilter === "all" ? "category-chip-active" : ""}`}
-                onClick={() => selectCategory("all")}
+                className="btn-secondary btn-small category-picker-toggle"
+                onClick={() => setCategoryPickerCollapsed((collapsed) => !collapsed)}
+                aria-expanded={!categoryPickerCollapsed}
               >
-                <span className="category-chip-content">
-                  <span className="category-chip-label">View All Inventory</span>
-                  <span className="category-chip-meta">{items.length} item{items.length === 1 ? "" : "s"}</span>
-                </span>
+                {categoryPickerCollapsed ? "Show" : "Minimize"}
               </button>
-
-              {categories.map((cat) => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  className={`category-chip ${categoryFilter === cat.id ? "category-chip-active" : ""}`}
-                  onClick={() => selectCategory(cat.id)}
-                >
-                  <span className="category-chip-content">
-                    <span className="category-chip-label">{cat.name}</span>
-                    <span className="category-chip-meta">
-                      {itemCountsByCategory.get(cat.id) || 0} item
-                      {(itemCountsByCategory.get(cat.id) || 0) === 1 ? "" : "s"}
-                    </span>
-                  </span>
-                </button>
-              ))}
-
-              {!settingMatsCategory && (
-                <button
-                  type="button"
-                  className="category-chip category-chip-add"
-                  disabled={settingMatsBootstrapping || loading}
-                  onClick={() => void handleSettingMatsCategory()}
-                >
-                  <span className="category-chip-content">
-                    <span className="category-chip-label">{SETTING_MATS_CATEGORY_NAME}</span>
-                    <span className="category-chip-meta">
-                      {settingMatsBootstrapping ? "Adding…" : "Setting materials — click to add category"}
-                    </span>
-                  </span>
-                </button>
-              )}
             </div>
+
+            {!categoryPickerCollapsed && (
+              <div className="category-grid">
+                <button
+                  type="button"
+                  className={`category-chip ${categoryFilter === "all" ? "category-chip-active" : ""}`}
+                  onClick={() => selectCategory("all")}
+                >
+                  <span className="category-chip-content">
+                    <span className="category-chip-label">View All Inventory</span>
+                    <span className="category-chip-meta">{items.length} item{items.length === 1 ? "" : "s"}</span>
+                  </span>
+                </button>
+
+                {categories.map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    className={`category-chip ${categoryFilter === cat.id ? "category-chip-active" : ""}`}
+                    onClick={() => selectCategory(cat.id)}
+                  >
+                    <span className="category-chip-content">
+                      <span className="category-chip-label">{cat.name}</span>
+                      <span className="category-chip-meta">
+                        {itemCountsByCategory.get(cat.id) || 0} item
+                        {(itemCountsByCategory.get(cat.id) || 0) === 1 ? "" : "s"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+
+                {!settingMatsCategory && (
+                  <button
+                    type="button"
+                    className="category-chip category-chip-add"
+                    disabled={settingMatsBootstrapping || loading}
+                    onClick={() => void handleSettingMatsCategory()}
+                  >
+                    <span className="category-chip-content">
+                      <span className="category-chip-label">{SETTING_MATS_CATEGORY_NAME}</span>
+                      <span className="category-chip-meta">
+                        {settingMatsBootstrapping ? "Adding…" : "Setting materials — click to add category"}
+                      </span>
+                    </span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
-          {categoryFilter !== "all" && categoryFilter && (
+          {!categoryPickerCollapsed && categoryFilter !== "all" && categoryFilter && (
             <div className="subcategory-picker-card">
               <div className="subcategory-picker-header">
                 <h4>Subcategory (optional)</h4>

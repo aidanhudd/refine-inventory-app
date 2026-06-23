@@ -126,6 +126,42 @@ button:focus-visible {
   margin-bottom: 18px;
   box-shadow: var(--card-shadow);
 }
+.category-picker-collapsed {
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+.category-picker-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.category-picker-collapsed .category-picker-top {
+  align-items: center;
+}
+.category-picker-toggle {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.category-picker-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.category-picker-summary-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.category-picker-summary-meta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
 .category-picker-header h3 {
   font-size: 18px;
   letter-spacing: -0.01em;
@@ -133,7 +169,13 @@ button:focus-visible {
 .category-picker-header .subtext {
   margin-top: 6px;
 }
-.category-picker-header { margin-bottom: 14px; }
+.category-picker-header { margin-bottom: 0; }
+.category-picker-card:not(.category-picker-collapsed) .category-picker-header {
+  margin-bottom: 14px;
+}
+.category-picker-collapsed .category-picker-header h3 {
+  font-size: 15px;
+}
 .category-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
