@@ -108,6 +108,7 @@ export default function Home() {
   const [usageList, setUsageList] = useState<UsageRow[]>([])
   const [form, setForm] = useState(defaultForm)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [itemFormOpen, setItemFormOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("")
@@ -379,6 +380,7 @@ const [useJob, setUseJob] = useState("")
   }
 
   const resetForm = () => {
+    setItemFormOpen(false)
     setEditingId(null)
     setSelectedFiles([])
     setForm({
@@ -387,6 +389,24 @@ const [useJob, setUseJob] = useState("")
       subcategory_id: "",
       quantity_type: quantityTypes[0]?.name || "",
     })
+  }
+
+  const openAddForm = () => {
+    setEditingId(null)
+    setSelectedFiles([])
+    setMessage("")
+    setErrorMessage("")
+    setForm({
+      ...defaultForm,
+      category_id: categoryFilter && categoryFilter !== "all" ? categoryFilter : categories[0]?.id || "",
+      subcategory_id: subcategoryFilter && subcategoryFilter !== "none" ? subcategoryFilter : "",
+      quantity_type: quantityTypes[0]?.name || "",
+    })
+    setItemFormOpen(true)
+  }
+
+  const closeItemForm = () => {
+    resetForm()
   }
 
   const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
@@ -544,7 +564,7 @@ const [useJob, setUseJob] = useState("")
       notes: item.notes || "",
       status: item.status || "active",
     })
-    window.scrollTo({ top: 0, behavior: "smooth" })
+    setItemFormOpen(true)
   }
 
   const startInlineEdit = (item: InventoryItem) => {
@@ -870,155 +890,10 @@ const [useJob, setUseJob] = useState("")
         </div>
       </div>
 
-      <div className="layout">
-        <section className="card">
-          <h2>{editingId ? "Edit Inventory Item" : "Add Inventory Item"}</h2>
-          <p className="subtext" style={{ marginBottom: "16px" }}>
-            {editingId
-              ? "Update an existing item, then save changes."
-              : "Add core product details and optional photos on creation."}
-          </p>
+      {!itemFormOpen && message && <div className="success page-feedback">{message}</div>}
+      {!itemFormOpen && errorMessage && <div className="notice page-feedback">{errorMessage}</div>}
 
-          {categories.length === 0 && (
-            <div className="notice">
-              Your categories table is empty. Add rows like Quartz, Granite, LVP, SPC, Cabinets, etc. in Supabase.
-            </div>
-          )}
-
-          {quantityTypes.length === 0 && (
-            <div className="notice">
-              Your quantity_types table is empty. Add rows like slab, box, piece, sq ft, bundle, and pallet in Supabase.
-            </div>
-          )}
-
-
-          {message && <div className="success">{message}</div>}
-          {errorMessage && <div className="notice">{errorMessage}</div>}
-
-          <div className="form-grid">
-            <div className="field">
-              <label>Product Name</label>
-              <input value={form.product_name} onChange={(e) => handleChange("product_name", e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label>SKU</label>
-              <input value={form.sku} onChange={(e) => handleChange("sku", e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label>Category</label>
-              <select value={form.category_id} onChange={(e) => handleChange("category_id", e.target.value)}>
-                <option value="">Select category</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Subcategory (optional)</label>
-              <select
-                value={form.subcategory_id}
-                onChange={(e) => handleChange("subcategory_id", e.target.value)}
-                disabled={!form.category_id}
-              >
-                <option value="">None</option>
-                {formSubcategories.map((sub) => (
-                  <option key={sub.id} value={sub.id}>
-                    {sub.name}
-                  </option>
-                ))}
-              </select>
-              {form.category_id && formSubcategories.length === 0 && (
-                <div className="small">No subcategories for this category yet.</div>
-              )}
-            </div>
-
-            <div className="field">
-              <label>Quantity</label>
-              <input
-                type="number"
-                value={form.quantity_on_hand}
-                onChange={(e) => handleChange("quantity_on_hand", e.target.value)}
-              />
-            </div>
-
-            <div className="field">
-              <label>Quantity Type</label>
-              <select value={form.quantity_type} onChange={(e) => handleChange("quantity_type", e.target.value)}>
-                <option value="">Select quantity type</option>
-                {quantityTypes.map((qty) => (
-                  <option key={qty.id} value={qty.name}>
-                    {qty.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Unit Cost</label>
-              <input type="number" value={form.unit_cost} onChange={(e) => handleChange("unit_cost", e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label>Total Value (Auto)</label>
-              <input value={formatCurrency(formTotalValue)} readOnly />
-            </div>
-
-            <div className="field">
-              <label>Warehouse Location</label>
-              <input
-                value={form.warehouse_location}
-                onChange={(e) => handleChange("warehouse_location", e.target.value)}
-              />
-            </div>
-
-            <div className="field">
-              <label>Status</label>
-              <select value={form.status} onChange={(e) => handleChange("status", e.target.value)}>
-                <option value="active">active</option>
-                <option value="low_stock">low_stock</option>
-                <option value="reserved">reserved</option>
-                <option value="damaged">damaged</option>
-                <option value="sold">sold</option>
-              </select>
-            </div>
-
-            <div className="field">
-              <label>Notes</label>
-              <textarea value={form.notes} onChange={(e) => handleChange("notes", e.target.value)} />
-            </div>
-
-            <div className="field">
-              <label>{editingId ? "Add New Photos While Editing" : "Photos"}</label>
-              <input type="file" multiple accept="image/*" onChange={handleFileSelect} />
-              <div className="small">
-                {selectedFiles.length ? `${selectedFiles.length} file(s) selected` : "No photos selected yet."}
-              </div>
-            </div>
-
-            <div className="button-row">
-              <button className="btn-primary" onClick={saveItem} disabled={saving}>
-                {saving ? "Saving..." : editingId ? "Save Changes" : "Save Item"}
-              </button>
-
-              <button className="btn-secondary" onClick={loadAll}>
-                Refresh Data
-              </button>
-
-              {editingId && (
-                <button className="btn-edit" onClick={resetForm}>
-                  Cancel Edit
-                </button>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section>
+      <section className="inventory-section">
           <div className="toolbar">
             <input
               className="search"
@@ -1026,6 +901,9 @@ const [useJob, setUseJob] = useState("")
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <button type="button" className="btn-primary toolbar-add-btn" onClick={openAddForm}>
+              Add Inventory
+            </button>
           </div>
 
           <div className={`category-picker-card ${categoryPickerCollapsed ? "category-picker-collapsed" : ""}`}>
@@ -1446,9 +1324,7 @@ const [useJob, setUseJob] = useState("")
               })}
                     </div>   
           )}
-        </section>
-      </div>
-
+      </section>
 
           {activeImage && (
         <div
@@ -1477,6 +1353,150 @@ const [useJob, setUseJob] = useState("")
               borderRadius: "12px",
             }}
           />
+        </div>
+      )}
+
+      {itemFormOpen && (
+        <div className="modal-overlay" onClick={closeItemForm}>
+          <div className="modal-panel modal-panel-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{editingId ? "Edit Inventory Item" : "Add Inventory Item"}</h2>
+              <p className="subtext">
+                {editingId
+                  ? "Update product details and optionally add more photos."
+                  : "Fill in product details and optionally attach photos."}
+              </p>
+            </div>
+
+            {categories.length === 0 && (
+              <div className="notice">
+                Your categories table is empty. Add rows like Quartz, Granite, LVP, SPC, Cabinets, etc. in Supabase.
+              </div>
+            )}
+
+            {quantityTypes.length === 0 && (
+              <div className="notice">
+                Your quantity_types table is empty. Add rows like slab, box, piece, sq ft, bundle, and pallet in Supabase.
+              </div>
+            )}
+
+            {errorMessage && <div className="notice">{errorMessage}</div>}
+
+            <div className="form-grid form-grid-modal">
+              <div className="field">
+                <label>Product Name</label>
+                <input value={form.product_name} onChange={(e) => handleChange("product_name", e.target.value)} />
+              </div>
+
+              <div className="field">
+                <label>SKU</label>
+                <input value={form.sku} onChange={(e) => handleChange("sku", e.target.value)} />
+              </div>
+
+              <div className="field">
+                <label>Category</label>
+                <select value={form.category_id} onChange={(e) => handleChange("category_id", e.target.value)}>
+                  <option value="">Select category</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Subcategory (optional)</label>
+                <select
+                  value={form.subcategory_id}
+                  onChange={(e) => handleChange("subcategory_id", e.target.value)}
+                  disabled={!form.category_id}
+                >
+                  <option value="">None</option>
+                  {formSubcategories.map((sub) => (
+                    <option key={sub.id} value={sub.id}>
+                      {sub.name}
+                    </option>
+                  ))}
+                </select>
+                {form.category_id && formSubcategories.length === 0 && (
+                  <div className="small">No subcategories for this category yet.</div>
+                )}
+              </div>
+
+              <div className="field">
+                <label>Quantity</label>
+                <input
+                  type="number"
+                  value={form.quantity_on_hand}
+                  onChange={(e) => handleChange("quantity_on_hand", e.target.value)}
+                />
+              </div>
+
+              <div className="field">
+                <label>Quantity Type</label>
+                <select value={form.quantity_type} onChange={(e) => handleChange("quantity_type", e.target.value)}>
+                  <option value="">Select quantity type</option>
+                  {quantityTypes.map((qty) => (
+                    <option key={qty.id} value={qty.name}>
+                      {qty.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field">
+                <label>Unit Cost</label>
+                <input type="number" value={form.unit_cost} onChange={(e) => handleChange("unit_cost", e.target.value)} />
+              </div>
+
+              <div className="field">
+                <label>Total Value (Auto)</label>
+                <input value={formatCurrency(formTotalValue)} readOnly />
+              </div>
+
+              <div className="field">
+                <label>Warehouse Location</label>
+                <input
+                  value={form.warehouse_location}
+                  onChange={(e) => handleChange("warehouse_location", e.target.value)}
+                />
+              </div>
+
+              <div className="field">
+                <label>Status</label>
+                <select value={form.status} onChange={(e) => handleChange("status", e.target.value)}>
+                  <option value="active">active</option>
+                  <option value="low_stock">low_stock</option>
+                  <option value="reserved">reserved</option>
+                  <option value="damaged">damaged</option>
+                  <option value="sold">sold</option>
+                </select>
+              </div>
+
+              <div className="field field-full">
+                <label>Notes</label>
+                <textarea value={form.notes} onChange={(e) => handleChange("notes", e.target.value)} />
+              </div>
+
+              <div className="field field-full">
+                <label>{editingId ? "Add New Photos While Editing" : "Photos"}</label>
+                <input type="file" multiple accept="image/*" onChange={handleFileSelect} />
+                <div className="small">
+                  {selectedFiles.length ? `${selectedFiles.length} file(s) selected` : "No photos selected yet."}
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-actions modal-actions-end">
+              <button type="button" className="btn-secondary" onClick={closeItemForm} disabled={saving}>
+                Cancel
+              </button>
+              <button type="button" className="btn-primary" onClick={saveItem} disabled={saving}>
+                {saving ? "Saving..." : editingId ? "Save Changes" : "Save Item"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

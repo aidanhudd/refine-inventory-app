@@ -55,9 +55,19 @@ h3 { font-size: 18px; line-height: 1.3; }
 .eyebrow { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
 .subtext { color: var(--muted); margin-top: 8px; font-size: 14px; line-height: 1.55; }
 
-.layout { display: grid; grid-template-columns: 400px 1fr; gap: 24px; }
+.layout { display: grid; grid-template-columns: 1fr; gap: 24px; }
+.inventory-section { display: grid; gap: 0; }
+.page-feedback { margin-bottom: 16px; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 22px; box-shadow: var(--card-shadow); }
 .form-grid { display: grid; gap: 16px; }
+.form-grid-modal {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 4px;
+}
+.form-grid-modal .field-full {
+  grid-column: 1 / -1;
+}
 .field { display: grid; gap: 8px; }
 label { font-size: 13px; color: var(--muted); font-weight: 600; }
 input, select, textarea, button { font: inherit; }
@@ -118,6 +128,10 @@ button:focus-visible {
   padding: 8px 0;
 }
 .toolbar .search { flex: 1; min-width: 220px; }
+.toolbar-add-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
 .category-picker-card {
   background: var(--card);
   border: 1px solid var(--line);
@@ -349,7 +363,19 @@ button:focus-visible {
 .section-gap { margin-top: 20px; }
 .modal-overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; background: var(--modal-overlay); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
 .modal-panel { width: 100%; max-width: 400px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 22px; box-shadow: var(--card-shadow-hover); }
+.modal-panel-wide {
+  max-width: 760px;
+  max-height: min(90vh, 920px);
+  overflow-y: auto;
+}
+.modal-header { margin-bottom: 16px; }
 .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 8px; }
+.modal-actions-end {
+  justify-content: flex-end;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
 
 @media (prefers-color-scheme: dark) {
   :root {
@@ -411,6 +437,7 @@ button:focus-visible {
   .item-price { text-align: left; }
   .category-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   .category-chip { min-height: 76px; }
+  .form-grid-modal { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .stats { grid-template-columns: 1fr; }
