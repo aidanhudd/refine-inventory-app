@@ -61,20 +61,23 @@ type SoldUndoSnapshot = {
   quantity_on_hand: number
 }
 
-const defaultForm = {
-  sku: "",
+const defaultInlineDraft = (
+  categories: Category[],
+  quantityTypes: QuantityType[],
+  categoryFilter: string,
+  subcategoryFilter: string,
+): InlineEditForm => ({
   product_name: "",
-  category_id: "",
-  subcategory_id: "",
+  category_id: categoryFilter && categoryFilter !== "all" ? categoryFilter : categories[0]?.id || "",
+  subcategory_id: subcategoryFilter && subcategoryFilter !== "none" ? subcategoryFilter : "",
   quantity_on_hand: "1",
-  quantity_type: "",
   unit_cost: "",
   warehouse_location: "",
   notes: "",
-  status: "active",
-}
+})
 
 const SETTING_MATS_CATEGORY_NAME = "Setting Mats"
+const NEW_ITEM_DRAFT_ID = "__new-item__"
 
 const getActionableSupabaseError = (message: string) => {
   const lower = message.toLowerCase()
@@ -123,9 +126,6 @@ export default function Home() {
   const [subcategories, setSubcategories] = useState<Subcategory[]>([])
   const [quantityTypes, setQuantityTypes] = useState<QuantityType[]>([])
   const [usageList, setUsageList] = useState<UsageRow[]>([])
-  const [form, setForm] = useState(defaultForm)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [itemFormOpen, setItemFormOpen] = useState(false)
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("")
@@ -133,10 +133,9 @@ export default function Home() {
   const [categoryPickerCollapsed, setCategoryPickerCollapsed] = useState(false)
   const [jobSearch, setJobSearch] = useState("")
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([])
+  const [newItemFiles, setNewItemFiles] = useState<File[]>([])
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null)
   const [photoMap, setPhotoMap] = useState<PhotoMap>({})
   const [activeImage, setActiveImage] = useState<string | null>(null)
@@ -177,12 +176,6 @@ const [useJob, setUseJob] = useState("")
     setSubcategories(subcategoriesRes.data || [])
     setQuantityTypes(quantityTypesRes.data || [])
     setUsageList((usageRes.data as UsageRow[]) || [])
-
-    setForm((prev) => ({
-      ...prev,
-      category_id: prev.category_id || categoriesRes.data?.[0]?.id || "",
-      quantity_type: prev.quantity_type || quantityTypesRes.data?.[0]?.name || "",
-    }))
 
     await loadPhotosForItems(loadedItems)
     setLoading(false)
@@ -260,10 +253,7 @@ const [useJob, setUseJob] = useState("")
     return subcategories.filter((sub) => sub.category_id === categoryFilter)
   }, [subcategories, categoryFilter])
 
-  const formSubcategories = useMemo(() => {
-    if (!form.category_id) return []
-    return subcategories.filter((sub) => sub.category_id === form.category_id)
-  }, [subcategories, form.category_id])
+  const isAddingNew = inlineEditingId === NEW_ITEM_DRAFT_ID && !!inlineDraft
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -363,12 +353,6 @@ const [useJob, setUseJob] = useState("")
     return items.filter((item) => (item.status || "").toLowerCase() === "sold").length
   }, [items])
 
-  const formTotalValue = useMemo(() => {
-    const qty = Number(form.quantity_on_hand || 0)
-    const cost = Number(form.unit_cost || 0)
-    return qty * cost
-  }, [form.quantity_on_hand, form.unit_cost])
-
   const jobEntries = useMemo(() => {
     const grouped: Record<string, UsageRow[]> = {}
 
@@ -382,54 +366,6 @@ const [useJob, setUseJob] = useState("")
       .filter(([job]) => job.toLowerCase().includes(jobSearch.toLowerCase()))
       .sort((a, b) => a[0].localeCompare(b[0]))
   }, [usageList, jobSearch])
-
-  const handleChange = (key: string, value: string) => {
-    setForm((prev) => {
-      const next = { ...prev, [key]: value }
-      if (key === "category_id") {
-        const subcategoryStillValid = subcategories.some(
-          (sub) => sub.id === prev.subcategory_id && sub.category_id === value,
-        )
-        if (!subcategoryStillValid) next.subcategory_id = ""
-      }
-      return next
-    })
-  }
-
-  const resetForm = () => {
-    setItemFormOpen(false)
-    setEditingId(null)
-    setSelectedFiles([])
-    setForm({
-      ...defaultForm,
-      category_id: categories[0]?.id || "",
-      subcategory_id: "",
-      quantity_type: quantityTypes[0]?.name || "",
-    })
-  }
-
-  const openAddForm = () => {
-    setEditingId(null)
-    setSelectedFiles([])
-    setMessage("")
-    setErrorMessage("")
-    setForm({
-      ...defaultForm,
-      category_id: categoryFilter && categoryFilter !== "all" ? categoryFilter : categories[0]?.id || "",
-      subcategory_id: subcategoryFilter && subcategoryFilter !== "none" ? subcategoryFilter : "",
-      quantity_type: quantityTypes[0]?.name || "",
-    })
-    setItemFormOpen(true)
-  }
-
-  const closeItemForm = () => {
-    resetForm()
-  }
-
-  const handleFileSelect = (e: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || [])
-    setSelectedFiles(files)
-  }
 
   const getPhotoUrl = (itemId: string, fileName: string) => {
     const { data: publicUrlData } = supabase.storage
@@ -468,136 +404,17 @@ const [useJob, setUseJob] = useState("")
     return uploadedUrls
   }
 
-  const saveItem = async () => {
-    setSaving(true)
-    setMessage("")
-    setErrorMessage("")
-
-    if (!form.product_name.trim()) {
-      setErrorMessage("Product name is required.")
-      setSaving(false)
-      return
-    }
-
-    const categoryValidationError = validateCategorySubcategory(
-      form.category_id,
-      form.subcategory_id,
-      subcategories,
-    )
-    if (categoryValidationError) {
-      setErrorMessage(categoryValidationError)
-      setSaving(false)
-      return
-    }
-
-    const payload = {
-      sku: form.sku || null,
-      product_name: form.product_name,
-      category_id: form.category_id || null,
-      subcategory_id: form.subcategory_id || null,
-      quantity_on_hand: Number(form.quantity_on_hand || 0),
-      quantity_type: form.quantity_type || null,
-      unit_cost: Number(form.unit_cost || 0),
-      warehouse_location: form.warehouse_location || null,
-      notes: form.notes || null,
-      status: form.status || "active",
-    }
-
-    if (editingId) {
-      const { data: updatedItem, error } = await supabase
-        .from("inventory_items")
-        .update(payload)
-        .eq("id", editingId)
-        .select()
-        .single()
-
-      if (error || !updatedItem) {
-        setErrorMessage(error?.message || "Failed to update item.")
-        setSaving(false)
-        return
-      }
-
-      setItems((prev) =>
-        prev.map((item) => (item.id === editingId ? ({ ...item, ...updatedItem } as InventoryItem) : item))
-      )
-
-      try {
-        if (selectedFiles.length) {
-          const uploadedUrls = await uploadPhotos(editingId, selectedFiles)
-          if (uploadedUrls.length) {
-            setPhotoMap((prev) => ({
-              ...prev,
-              [editingId]: [...(prev[editingId] || []), ...uploadedUrls],
-            }))
-          }
-        }
-        setMessage("Item updated successfully.")
-        resetForm()
-      } catch (uploadError: any) {
-        setErrorMessage(`Item updated, but photo upload failed: ${uploadError.message}`)
-      }
-
-      setSaving(false)
-      return
-    }
-
-    const { data, error } = await supabase
-      .from("inventory_items")
-      .insert([payload])
-      .select()
-      .single()
-
-    if (error) {
-      setErrorMessage(error.message)
-      setSaving(false)
-      return
-    }
-
-    try {
-      if (data?.id && selectedFiles.length) {
-        const uploadedUrls = await uploadPhotos(data.id, selectedFiles)
-        if (uploadedUrls.length) {
-          setPhotoMap((prev) => ({ ...prev, [data.id]: uploadedUrls }))
-        }
-      }
-      if (data) {
-        setItems((prev) => [data as InventoryItem, ...prev])
-      }
-      setMessage("Item saved successfully.")
-      resetForm()
-    } catch (uploadError: any) {
-      setErrorMessage(`Item saved, but photo upload failed: ${uploadError.message}`)
-      if (data) {
-        setItems((prev) => [data as InventoryItem, ...prev])
-      }
-    }
-
-    setSaving(false)
-  }
-
-  const startEdit = (item: InventoryItem) => {
+  const openAddForm = () => {
     cancelInlineEdit()
-    setEditingId(item.id)
     setMessage("")
     setErrorMessage("")
-    setSelectedFiles([])
-    setForm({
-      sku: item.sku || "",
-      product_name: item.product_name || "",
-      category_id: item.category_id || "",
-      subcategory_id: item.subcategory_id || "",
-      quantity_on_hand: String(item.quantity_on_hand ?? 0),
-      quantity_type: item.quantity_type || "",
-      unit_cost: String(item.unit_cost ?? 0),
-      warehouse_location: item.warehouse_location || "",
-      notes: item.notes || "",
-      status: item.status || "active",
-    })
-    setItemFormOpen(true)
+    setNewItemFiles([])
+    setInlineEditingId(NEW_ITEM_DRAFT_ID)
+    setInlineDraft(defaultInlineDraft(categories, quantityTypes, categoryFilter, subcategoryFilter))
   }
 
   const startInlineEdit = (item: InventoryItem) => {
-    if (itemFormOpen) closeItemForm()
+    cancelInlineEdit()
     setInlineEditingId(item.id)
     setInlineDraft({
       product_name: item.product_name || "",
@@ -616,6 +433,7 @@ const [useJob, setUseJob] = useState("")
     setInlineEditingId(null)
     setInlineDraft(null)
     setInlineSaving(false)
+    setNewItemFiles([])
   }
 
   const updateInlineDraft = (key: keyof InlineEditForm, value: string) => {
@@ -630,6 +448,68 @@ const [useJob, setUseJob] = useState("")
       }
       return next
     })
+  }
+
+  const saveNewItem = async () => {
+    if (!inlineDraft) return
+
+    if (!inlineDraft.product_name.trim()) {
+      setErrorMessage("Product name is required.")
+      return
+    }
+
+    const categoryValidationError = validateCategorySubcategory(
+      inlineDraft.category_id,
+      inlineDraft.subcategory_id,
+      subcategories,
+    )
+    if (categoryValidationError) {
+      setErrorMessage(categoryValidationError)
+      return
+    }
+
+    setInlineSaving(true)
+    setErrorMessage("")
+    setMessage("")
+
+    const payload = {
+      sku: null,
+      product_name: inlineDraft.product_name,
+      category_id: inlineDraft.category_id || null,
+      subcategory_id: inlineDraft.subcategory_id || null,
+      quantity_on_hand: Number(inlineDraft.quantity_on_hand || 0),
+      quantity_type: quantityTypes[0]?.name || null,
+      unit_cost: Number(inlineDraft.unit_cost || 0),
+      warehouse_location: inlineDraft.warehouse_location || null,
+      notes: inlineDraft.notes || null,
+      status: "active",
+    }
+
+    const { data, error } = await supabase.from("inventory_items").insert([payload]).select().single()
+
+    if (error || !data) {
+      setErrorMessage(error?.message || "Failed to save item.")
+      setInlineSaving(false)
+      return
+    }
+
+    try {
+      if (newItemFiles.length) {
+        const uploadedUrls = await uploadPhotos(data.id, newItemFiles)
+        if (uploadedUrls.length) {
+          setPhotoMap((prev) => ({ ...prev, [data.id]: uploadedUrls }))
+        }
+      }
+      setItems((prev) => [data as InventoryItem, ...prev])
+      setMessage("Item saved successfully.")
+      cancelInlineEdit()
+    } catch (uploadError: any) {
+      setItems((prev) => [data as InventoryItem, ...prev])
+      setErrorMessage(`Item saved, but photo upload failed: ${uploadError.message}`)
+      cancelInlineEdit()
+    }
+
+    setInlineSaving(false)
   }
 
   const saveInlineEdit = async (item: InventoryItem) => {
@@ -708,8 +588,8 @@ const [useJob, setUseJob] = useState("")
       return next
     })
 
-    if (editingId === id) {
-      resetForm()
+    if (inlineEditingId === id) {
+      cancelInlineEdit()
     }
 
     setMessage("Item deleted.")
@@ -833,14 +713,6 @@ const [useJob, setUseJob] = useState("")
       return
     }
 
-    if (editingId === id) {
-      setForm((prev) => ({
-        ...prev,
-        status: "sold",
-        quantity_on_hand: "0",
-      }))
-    }
-
     setSoldUndoMap((prev) => ({
       ...prev,
       [id]: {
@@ -876,14 +748,6 @@ const [useJob, setUseJob] = useState("")
     if (error) {
       setErrorMessage(error.message)
       return
-    }
-
-    if (editingId === id) {
-      setForm((prev) => ({
-        ...prev,
-        status: snapshot.status,
-        quantity_on_hand: String(snapshot.quantity_on_hand),
-      }))
     }
 
     setItems((prev) =>
@@ -944,8 +808,8 @@ const [useJob, setUseJob] = useState("")
         </div>
       </div>
 
-      {!itemFormOpen && message && <div className="success page-feedback">{message}</div>}
-      {!itemFormOpen && errorMessage && <div className="notice page-feedback">{errorMessage}</div>}
+      {message && <div className="success page-feedback">{message}</div>}
+      {errorMessage && <div className="notice page-feedback">{errorMessage}</div>}
 
       <section className="inventory-section">
           <div className="toolbar">
@@ -1080,14 +944,148 @@ const [useJob, setUseJob] = useState("")
 
           {loading ? (
             <div className="empty">Loading inventory...</div>
-          ) : !hasSelectedInventoryView ? (
+          ) : !hasSelectedInventoryView && !isAddingNew ? (
             <div className="empty">Select a category above to start browsing inventory.</div>
-          ) : filteredItems.length === 0 ? (
+          ) : filteredItems.length === 0 && !isAddingNew ? (
             <div className="empty">
               No items found in {selectedViewLabel || "this view"}. Try another category or refine your filters.
             </div>
           ) : (
             <div className="list">
+              {isAddingNew && inlineDraft && (
+                <div key={NEW_ITEM_DRAFT_ID} className="item-card item-card-new">
+                  <div className="item-top">
+                    <div>
+                      <input
+                        className="inline-input"
+                        value={inlineDraft.product_name}
+                        onChange={(e) => updateInlineDraft("product_name", e.target.value)}
+                        placeholder="Product name"
+                      />
+                      <div className="badges">
+                        <div className="inline-category-fields">
+                          <select
+                            className="inline-input"
+                            value={inlineDraft.category_id}
+                            onChange={(e) => updateInlineDraft("category_id", e.target.value)}
+                            aria-label="Category"
+                          >
+                            <option value="">Select category</option>
+                            {categories.map((cat) => (
+                              <option key={cat.id} value={cat.id}>
+                                {cat.name}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            className="inline-input"
+                            value={inlineDraft.subcategory_id}
+                            onChange={(e) => updateInlineDraft("subcategory_id", e.target.value)}
+                            disabled={!inlineDraft.category_id}
+                            aria-label="Subcategory"
+                          >
+                            <option value="">No subcategory</option>
+                            {subcategories
+                              .filter((sub) => sub.category_id === inlineDraft.category_id)
+                              .map((sub) => (
+                                <option key={sub.id} value={sub.id}>
+                                  {sub.name}
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                        <span className="badge">No SKU</span>
+                      </div>
+                    </div>
+                    <div className="item-price">
+                      <div className="small" style={{ marginTop: 0 }}>Unit Cost</div>
+                      <input
+                        className="inline-input"
+                        type="number"
+                        value={inlineDraft.unit_cost}
+                        onChange={(e) => updateInlineDraft("unit_cost", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="item-kpis">
+                    <div className="item-kpi">
+                      <div className="item-kpi-label">Quantity on Hand</div>
+                      <input
+                        className="inline-input"
+                        type="number"
+                        value={inlineDraft.quantity_on_hand}
+                        onChange={(e) => updateInlineDraft("quantity_on_hand", e.target.value)}
+                      />
+                    </div>
+                    <div className="item-kpi item-kpi-status">
+                      <div className="item-kpi-label">Location</div>
+                      <input
+                        className="inline-input"
+                        value={inlineDraft.warehouse_location}
+                        onChange={(e) => updateInlineDraft("warehouse_location", e.target.value)}
+                        placeholder="Warehouse location"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="meta-grid">
+                    <div>
+                      <strong>Total Value:</strong>{" "}
+                      {formatCurrency(
+                        Number(inlineDraft.quantity_on_hand || 0) * Number(inlineDraft.unit_cost || 0),
+                      )}
+                    </div>
+                    <div>
+                      <strong>Status:</strong> active
+                    </div>
+                  </div>
+
+                  <div className="meta-grid meta-grid-secondary section-gap">
+                    <div>
+                      <strong>Created:</strong> New item
+                    </div>
+                    <div>
+                      <strong>Notes:</strong>{" "}
+                      <textarea
+                        className="inline-textarea"
+                        value={inlineDraft.notes}
+                        onChange={(e) => updateInlineDraft("notes", e.target.value)}
+                        placeholder="Notes"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="section-gap">
+                    <label>Photos</label>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={(e) => setNewItemFiles(Array.from(e.target.files || []))}
+                    />
+                    <div className="small">
+                      {newItemFiles.length
+                        ? `${newItemFiles.length} file(s) selected`
+                        : "Optional photos to upload on save."}
+                    </div>
+                  </div>
+
+                  <div className="action-row">
+                    <button
+                      className="btn-primary btn-small"
+                      disabled={inlineSaving}
+                      onClick={() => void saveNewItem()}
+                    >
+                      {inlineSaving ? "Saving..." : "Save"}
+                    </button>
+                    <button className="btn-secondary btn-small" disabled={inlineSaving} onClick={cancelInlineEdit}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {filteredItems.map((item) => {
                 const categoryName = item.category_id ? categoryNameById.get(item.category_id) : ""
                 const subcategoryName = item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) : ""
@@ -1366,9 +1364,6 @@ const [useJob, setUseJob] = useState("")
                           <button className="btn-edit btn-small" onClick={() => startInlineEdit(item)}>
                             Edit
                           </button>
-                          <button className="btn-secondary btn-small" onClick={() => startEdit(item)}>
-                            Edit All
-                          </button>
                         </>
                       )}
 
@@ -1448,150 +1443,6 @@ const [useJob, setUseJob] = useState("")
               borderRadius: "12px",
             }}
           />
-        </div>
-      )}
-
-      {itemFormOpen && (
-        <div className="modal-overlay" onClick={closeItemForm}>
-          <div className="modal-panel modal-panel-wide" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{editingId ? "Edit Inventory Item" : "Add Inventory Item"}</h2>
-              <p className="subtext">
-                {editingId
-                  ? "Update product details and optionally add more photos."
-                  : "Fill in product details and optionally attach photos."}
-              </p>
-            </div>
-
-            {categories.length === 0 && (
-              <div className="notice">
-                Your categories table is empty. Add rows like Quartz, Granite, LVP, SPC, Cabinets, etc. in Supabase.
-              </div>
-            )}
-
-            {quantityTypes.length === 0 && (
-              <div className="notice">
-                Your quantity_types table is empty. Add rows like slab, box, piece, sq ft, bundle, and pallet in Supabase.
-              </div>
-            )}
-
-            {errorMessage && <div className="notice">{errorMessage}</div>}
-
-            <div className="form-grid form-grid-modal">
-              <div className="field">
-                <label>Product Name</label>
-                <input value={form.product_name} onChange={(e) => handleChange("product_name", e.target.value)} />
-              </div>
-
-              <div className="field">
-                <label>SKU</label>
-                <input value={form.sku} onChange={(e) => handleChange("sku", e.target.value)} />
-              </div>
-
-              <div className="field">
-                <label>Category</label>
-                <select value={form.category_id} onChange={(e) => handleChange("category_id", e.target.value)}>
-                  <option value="">Select category</option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="field">
-                <label>Subcategory (optional)</label>
-                <select
-                  value={form.subcategory_id}
-                  onChange={(e) => handleChange("subcategory_id", e.target.value)}
-                  disabled={!form.category_id}
-                >
-                  <option value="">None</option>
-                  {formSubcategories.map((sub) => (
-                    <option key={sub.id} value={sub.id}>
-                      {sub.name}
-                    </option>
-                  ))}
-                </select>
-                {form.category_id && formSubcategories.length === 0 && (
-                  <div className="small">No subcategories for this category yet.</div>
-                )}
-              </div>
-
-              <div className="field">
-                <label>Quantity</label>
-                <input
-                  type="number"
-                  value={form.quantity_on_hand}
-                  onChange={(e) => handleChange("quantity_on_hand", e.target.value)}
-                />
-              </div>
-
-              <div className="field">
-                <label>Quantity Type</label>
-                <select value={form.quantity_type} onChange={(e) => handleChange("quantity_type", e.target.value)}>
-                  <option value="">Select quantity type</option>
-                  {quantityTypes.map((qty) => (
-                    <option key={qty.id} value={qty.name}>
-                      {qty.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="field">
-                <label>Unit Cost</label>
-                <input type="number" value={form.unit_cost} onChange={(e) => handleChange("unit_cost", e.target.value)} />
-              </div>
-
-              <div className="field">
-                <label>Total Value (Auto)</label>
-                <input value={formatCurrency(formTotalValue)} readOnly />
-              </div>
-
-              <div className="field">
-                <label>Warehouse Location</label>
-                <input
-                  value={form.warehouse_location}
-                  onChange={(e) => handleChange("warehouse_location", e.target.value)}
-                />
-              </div>
-
-              <div className="field">
-                <label>Status</label>
-                <select value={form.status} onChange={(e) => handleChange("status", e.target.value)}>
-                  <option value="active">active</option>
-                  <option value="low_stock">low_stock</option>
-                  <option value="reserved">reserved</option>
-                  <option value="damaged">damaged</option>
-                  <option value="sold">sold</option>
-                </select>
-              </div>
-
-              <div className="field field-full">
-                <label>Notes</label>
-                <textarea value={form.notes} onChange={(e) => handleChange("notes", e.target.value)} />
-              </div>
-
-              <div className="field field-full">
-                <label>{editingId ? "Add New Photos While Editing" : "Photos"}</label>
-                <input type="file" multiple accept="image/*" onChange={handleFileSelect} />
-                <div className="small">
-                  {selectedFiles.length ? `${selectedFiles.length} file(s) selected` : "No photos selected yet."}
-                </div>
-              </div>
-            </div>
-
-            <div className="modal-actions modal-actions-end">
-              <button type="button" className="btn-secondary" onClick={closeItemForm} disabled={saving}>
-                Cancel
-              </button>
-              <button type="button" className="btn-primary" onClick={saveItem} disabled={saving}>
-                {saving ? "Saving..." : editingId ? "Save Changes" : "Save Item"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
 

@@ -303,6 +303,10 @@ button:focus-visible {
   transition: box-shadow 180ms ease, border-color 180ms ease;
 }
 .item-card:hover { box-shadow: var(--card-shadow-hover); border-color: #d0d5dd; }
+.item-card-new {
+  border-color: #a4bcfd;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--card-shadow);
+}
 .item-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
 .item-name { font-weight: 800; font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: 4px; }
 .badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
