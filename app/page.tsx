@@ -6,6 +6,13 @@ import { useAuth } from "./components/AuthProvider"
 import InventoryItemCard from "./components/InventoryItemCard"
 import InventoryCategoryGridCard from "./components/InventoryCategoryGridCard"
 import CategoryExpandedItemPanel from "./components/CategoryExpandedItemPanel"
+import ItemDimensionsFields from "./components/ItemDimensionsFields"
+import {
+  buildDimensionPayload,
+  calculateSquareFeetFromStrings,
+  categoryIdSupportsDimensions,
+  formatSquareFeetNumber,
+} from "../lib/inventoryDimensions"
 
 type Category = {
   id: string
@@ -36,6 +43,9 @@ type InventoryItem = {
   notes: string | null
   status: string | null
   created_at: string | null
+  length_inches: number | null
+  width_inches: number | null
+  square_feet: number | null
 }
 
 type UsageRow = {
@@ -58,6 +68,9 @@ type InlineEditForm = {
   unit_cost: string
   warehouse_location: string
   notes: string
+  length_inches: string
+  width_inches: string
+  square_feet: string
 }
 
 type SoldUndoSnapshot = {
@@ -79,6 +92,9 @@ const defaultInlineDraft = (
   unit_cost: "",
   warehouse_location: "",
   notes: "",
+  length_inches: "",
+  width_inches: "",
+  square_feet: "",
 })
 
 const SETTING_MATS_CATEGORY_NAME = "Setting Mats"
@@ -112,6 +128,14 @@ const getActionableSupabaseError = (message: string) => {
 
   if (lower.includes("subcategor") || (lower.includes("column") && lower.includes("subcategory_id"))) {
     return "Database migration missing: run supabase/migrations/20260519_inventory_subcategories.sql in Supabase SQL Editor, then retry."
+  }
+
+  if (
+    lower.includes("length_inches") ||
+    lower.includes("width_inches") ||
+    lower.includes("square_feet")
+  ) {
+    return "Database migration missing: run supabase/migrations/20260520_inventory_item_dimensions.sql in Supabase SQL Editor, then retry."
   }
 
   if (lower.includes("row-level security")) {
@@ -304,6 +328,9 @@ const [useJob, setUseJob] = useState("")
         item.warehouse_location || "",
         item.notes || "",
         item.status || "",
+        item.length_inches != null ? String(item.length_inches) : "",
+        item.width_inches != null ? String(item.width_inches) : "",
+        item.square_feet != null ? String(item.square_feet) : "",
       ]
         .join(" ")
         .toLowerCase()
@@ -528,6 +555,9 @@ const [useJob, setUseJob] = useState("")
       unit_cost: String(item.unit_cost ?? 0),
       warehouse_location: item.warehouse_location || "",
       notes: item.notes || "",
+      length_inches: item.length_inches != null ? String(item.length_inches) : "",
+      width_inches: item.width_inches != null ? String(item.width_inches) : "",
+      square_feet: item.square_feet != null ? formatSquareFeetNumber(item.square_feet) : "",
     })
     setErrorMessage("")
     setMessage("")
@@ -549,6 +579,17 @@ const [useJob, setUseJob] = useState("")
           (sub) => sub.id === prev.subcategory_id && sub.category_id === value,
         )
         if (!subcategoryStillValid) next.subcategory_id = ""
+        if (!categoryIdSupportsDimensions(value, categories)) {
+          next.length_inches = ""
+          next.width_inches = ""
+          next.square_feet = ""
+        }
+      }
+      if (key === "length_inches" || key === "width_inches") {
+        next.square_feet = calculateSquareFeetFromStrings(
+          key === "length_inches" ? value : next.length_inches,
+          key === "width_inches" ? value : next.width_inches,
+        )
       }
       return next
     })
@@ -576,6 +617,13 @@ const [useJob, setUseJob] = useState("")
     setErrorMessage("")
     setMessage("")
 
+    const dimensions = buildDimensionPayload(
+      inlineDraft.category_id,
+      categories,
+      inlineDraft.length_inches,
+      inlineDraft.width_inches,
+    )
+
     const payload = {
       sku: null,
       product_name: inlineDraft.product_name,
@@ -587,6 +635,7 @@ const [useJob, setUseJob] = useState("")
       warehouse_location: inlineDraft.warehouse_location || null,
       notes: inlineDraft.notes || null,
       status: "active",
+      ...dimensions,
     }
 
     const { data, error } = await supabase.from("inventory_items").insert([payload]).select().single()
@@ -638,6 +687,13 @@ const [useJob, setUseJob] = useState("")
     setErrorMessage("")
     setMessage("")
 
+    const dimensions = buildDimensionPayload(
+      inlineDraft.category_id,
+      categories,
+      inlineDraft.length_inches,
+      inlineDraft.width_inches,
+    )
+
     const payload = {
       product_name: inlineDraft.product_name,
       category_id: inlineDraft.category_id || null,
@@ -647,6 +703,7 @@ const [useJob, setUseJob] = useState("")
       unit_cost: Number(inlineDraft.unit_cost || 0),
       warehouse_location: inlineDraft.warehouse_location || null,
       notes: inlineDraft.notes || null,
+      ...dimensions,
     }
 
     const { data: updatedItem, error } = await supabase
@@ -1307,6 +1364,16 @@ const [useJob, setUseJob] = useState("")
                       />
                     </div>
                   </div>
+
+                  <ItemDimensionsFields
+                    categoryId={inlineDraft.category_id}
+                    categories={categories}
+                    lengthInches={inlineDraft.length_inches}
+                    widthInches={inlineDraft.width_inches}
+                    squareFeet={inlineDraft.square_feet}
+                    isEditing
+                    onUpdate={updateInlineDraft}
+                  />
 
                   <div className="meta-grid">
                     <div>

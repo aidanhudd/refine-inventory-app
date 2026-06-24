@@ -645,6 +645,40 @@ button:focus-visible {
   display: grid;
   gap: 8px;
 }
+.inline-dimension-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.inline-dimension-field {
+  display: grid;
+  gap: 4px;
+}
+.inline-dimension-label {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.inline-input-readonly {
+  background: color-mix(in srgb, var(--bg) 55%, var(--input-bg));
+  color: var(--muted);
+  cursor: default;
+}
+.item-dimensions-lines {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  color: var(--text);
+  margin-top: 4px;
+}
+.category-grid-card-dimensions {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.3;
+}
 .badges:has(.inline-category-fields) {
   display: grid;
   gap: 8px;
@@ -776,6 +810,7 @@ button:focus-visible {
   .category-chip { min-height: 76px; }
   .form-grid-modal { grid-template-columns: 1fr; }
   .inline-category-fields { grid-template-columns: 1fr; }
+  .inline-dimension-fields { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .stats { grid-template-columns: 1fr; }

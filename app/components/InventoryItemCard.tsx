@@ -1,6 +1,7 @@
 "use client"
 
 import { ChangeEvent } from "react"
+import ItemDimensionsFields from "./ItemDimensionsFields"
 
 export type InventoryItemCardCategory = { id: string; name: string }
 export type InventoryItemCardSubcategory = { id: string; category_id: string; name: string }
@@ -19,6 +20,9 @@ export type InventoryItemCardItem = {
   notes: string | null
   status: string | null
   created_at: string | null
+  length_inches: number | null
+  width_inches: number | null
+  square_feet: number | null
 }
 
 export type InventoryItemCardUsage = {
@@ -37,6 +41,9 @@ export type InventoryItemCardDraft = {
   unit_cost: string
   warehouse_location: string
   notes: string
+  length_inches: string
+  width_inches: string
+  square_feet: string
 }
 
 type InventoryItemCardProps = {
@@ -227,6 +234,19 @@ export default function InventoryItemCard({
           )}
         </div>
       </div>
+
+      <ItemDimensionsFields
+        categoryId={isInlineEditing && inlineDraft ? inlineDraft.category_id : item.category_id || ""}
+        categories={categories}
+        lengthInches={inlineDraft?.length_inches || ""}
+        widthInches={inlineDraft?.width_inches || ""}
+        squareFeet={inlineDraft?.square_feet || ""}
+        isEditing={!!(isInlineEditing && inlineDraft)}
+        onUpdate={onUpdateDraft}
+        storedLengthInches={item.length_inches}
+        storedWidthInches={item.width_inches}
+        storedSquareFeet={item.square_feet}
+      />
 
       <div className="meta-grid">
         <div>

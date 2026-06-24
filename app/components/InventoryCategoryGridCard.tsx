@@ -2,6 +2,7 @@
 
 import { ChangeEvent, KeyboardEvent, MouseEvent, useRef } from "react"
 import type { InventoryItemCardItem } from "./InventoryItemCard"
+import { categorySupportsDimensions, formatDimensionsSizeLine, formatDimensionsSquareFeetLine } from "../../lib/inventoryDimensions"
 
 type InventoryCategoryGridCardProps = {
   item: InventoryItemCardItem
@@ -94,6 +95,13 @@ export default function InventoryCategoryGridCard({
             </dd>
           </div>
         </dl>
+
+        {categorySupportsDimensions(categoryName) && (
+          <div className="category-grid-card-dimensions">
+            <div>{formatDimensionsSizeLine(item.length_inches, item.width_inches)}</div>
+            <div>{formatDimensionsSquareFeetLine(item.square_feet)}</div>
+          </div>
+        )}
 
         <div className="category-grid-card-actions" onClick={stopClick} onKeyDown={stopClick}>
           <button
