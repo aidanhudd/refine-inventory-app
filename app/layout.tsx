@@ -1,6 +1,7 @@
 import './globals.css'
 import AppShell from './components/AppShell'
 import { AuthProvider } from './components/AuthProvider'
+import { HidePricesProvider } from './components/HidePricesProvider'
 
 export const metadata = {
   title: 'Refine Inventory',
@@ -12,7 +13,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          <HidePricesProvider>
+            <AppShell>{children}</AppShell>
+          </HidePricesProvider>
         </AuthProvider>
       </body>
     </html>

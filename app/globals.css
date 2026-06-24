@@ -49,6 +49,61 @@ h3 { font-size: 18px; line-height: 1.3; }
 .app-logo { height: 48px; width: auto; display: block; object-fit: contain; flex-shrink: 0; }
 .app-title { font-size: 28px; line-height: 1.15; }
 .nav-links { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.nav-bar-meta { display: grid; gap: 6px; justify-items: end; }
+.hide-prices-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+.hide-prices-switch-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.hide-prices-switch-control { position: relative; display: inline-flex; }
+.hide-prices-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+}
+.hide-prices-switch-track {
+  display: inline-flex;
+  align-items: center;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: #d0d5dd;
+  border: 1px solid #c7cdd6;
+  transition: background 160ms ease, border-color 160ms ease;
+  padding: 2px;
+}
+.hide-prices-switch-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.18);
+  transform: translateX(0);
+  transition: transform 160ms ease;
+}
+.hide-prices-switch-input:checked + .hide-prices-switch-track {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.hide-prices-switch-input:checked + .hide-prices-switch-track .hide-prices-switch-thumb {
+  transform: translateX(14px);
+}
+.hide-prices-switch-input:focus-visible + .hide-prices-switch-track {
+  box-shadow: var(--focus-ring);
+}
+.stats-no-pricing { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .nav-link { padding: 9px 15px; border-radius: 10px; text-decoration: none; font-weight: 600; background: var(--accent); color: var(--text); border: 1px solid var(--line); transition: background 180ms ease, border-color 180ms ease, transform 180ms ease; }
 .nav-link:hover { background: #e3e9ff; border-color: #c7d2fe; transform: translateY(-1px); }
 .nav-link-active { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }

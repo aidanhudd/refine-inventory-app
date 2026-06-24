@@ -2,6 +2,7 @@
 
 import { ChangeEvent } from "react"
 import ItemDimensionsFields from "./ItemDimensionsFields"
+import { useHidePrices } from "./HidePricesProvider"
 
 export type InventoryItemCardCategory = { id: string; name: string }
 export type InventoryItemCardSubcategory = { id: string; category_id: string; name: string }
@@ -105,6 +106,7 @@ export default function InventoryItemCard({
   onPhotoDelete,
   suppressPhotoGallery = false,
 }: InventoryItemCardProps) {
+  const { hidePrices } = useHidePrices()
   const statusLabel = (item.status || "active").replace(/_/g, " ")
   const displayName = isInlineEditing && inlineDraft ? inlineDraft.product_name : item.product_name
   const displayQty = Number(isInlineEditing && inlineDraft ? inlineDraft.quantity_on_hand : item.quantity_on_hand || 0)
@@ -172,21 +174,23 @@ export default function InventoryItemCard({
             <span className="badge">{item.sku || "No SKU"}</span>
           </div>
         </div>
-        <div className="item-price">
-          <div className="small" style={{ marginTop: 0 }}>
-            Unit Cost
+        {!hidePrices && (
+          <div className="item-price">
+            <div className="small" style={{ marginTop: 0 }}>
+              Unit Cost
+            </div>
+            {isInlineEditing && inlineDraft ? (
+              <input
+                className="inline-input"
+                type="number"
+                value={inlineDraft.unit_cost}
+                onChange={(e) => onUpdateDraft("unit_cost", e.target.value)}
+              />
+            ) : (
+              <strong>{formatCurrency(Number(item.unit_cost || 0))}</strong>
+            )}
           </div>
-          {isInlineEditing && inlineDraft ? (
-            <input
-              className="inline-input"
-              type="number"
-              value={inlineDraft.unit_cost}
-              onChange={(e) => onUpdateDraft("unit_cost", e.target.value)}
-            />
-          ) : (
-            <strong>{formatCurrency(Number(item.unit_cost || 0))}</strong>
-          )}
-        </div>
+        )}
       </div>
 
       <div className="item-kpis">
@@ -249,9 +253,11 @@ export default function InventoryItemCard({
       />
 
       <div className="meta-grid">
-        <div>
-          <strong>Total Value:</strong> {formatCurrency(displayTotalValue)}
-        </div>
+        {!hidePrices && (
+          <div>
+            <strong>Total Value:</strong> {formatCurrency(displayTotalValue)}
+          </div>
+        )}
         <div>
           <strong>Status:</strong> {statusLabel}
         </div>

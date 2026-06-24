@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "../../lib/supabaseClient"
+import { useHidePrices } from "../components/HidePricesProvider"
 
 type InventoryItem = {
   id: string
@@ -35,6 +36,7 @@ const currency = (value: number) =>
   value.toLocaleString(undefined, { style: "currency", currency: "USD" })
 
 export default function EstimatePage() {
+  const { hidePrices } = useHidePrices()
   const [jobName, setJobName] = useState("")
   const [clientName, setClientName] = useState("")
   const [lines, setLines] = useState<EstimateLine[]>([createLine("1")])
@@ -84,7 +86,11 @@ export default function EstimatePage() {
           ...line,
           inventoryItemId: item.id,
           name: item.product_name || line.name,
-          unitCost: item.unit_cost !== null ? String(item.unit_cost) : line.unitCost,
+          unitCost: hidePrices
+            ? line.unitCost
+            : item.unit_cost !== null
+              ? String(item.unit_cost)
+              : line.unitCost,
         }
       })
     )
@@ -98,7 +104,7 @@ export default function EstimatePage() {
     <main>
       <h1>Estimate Builder</h1>
       <p className="subtext" style={{ marginBottom: "16px" }}>
-        Build a quick material estimate and total before creating the final proposal.
+        Build a quick material estimate{hidePrices ? "" : " and total"} before creating the final proposal.
       </p>
 
       <section className="card form-grid">
@@ -158,23 +164,25 @@ export default function EstimatePage() {
                       placeholder="0"
                     />
                   </div>
-                  <div className="field">
-                    <label>Unit Cost ($)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={line.unitCost}
-                      onChange={(e) => updateLine(line.id, "unitCost", e.target.value)}
-                      placeholder="0.00"
-                    />
-                  </div>
+                  {!hidePrices && (
+                    <div className="field">
+                      <label>Unit Cost ($)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={line.unitCost}
+                        onChange={(e) => updateLine(line.id, "unitCost", e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                  )}
                 </div>
                 {selectedInventoryItem?.quantity_type && (
                   <p className="small">Unit type: {selectedInventoryItem.quantity_type}</p>
                 )}
                 <div className="action-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                  <strong>Line Total: {currency(lineTotal)}</strong>
+                  {!hidePrices && <strong>Line Total: {currency(lineTotal)}</strong>}
                   <button className="btn-secondary btn-small" onClick={() => removeLine(line.id)} type="button">
                     Remove
                   </button>
@@ -199,9 +207,11 @@ export default function EstimatePage() {
         <p>
           <strong>Client:</strong> {clientName || "Not set"}
         </p>
-        <p style={{ marginTop: "10px" }}>
-          <strong>Subtotal:</strong> {currency(subtotal)}
-        </p>
+        {!hidePrices && (
+          <p style={{ marginTop: "10px" }}>
+            <strong>Subtotal:</strong> {currency(subtotal)}
+          </p>
+        )}
       </section>
     </main>
   )

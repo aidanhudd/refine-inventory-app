@@ -3,6 +3,7 @@
 import { ChangeEvent, KeyboardEvent, MouseEvent, useRef } from "react"
 import type { InventoryItemCardItem } from "./InventoryItemCard"
 import { categorySupportsDimensions, formatDimensionsSizeLine, formatDimensionsSquareFeetLine } from "../../lib/inventoryDimensions"
+import { useHidePrices } from "./HidePricesProvider"
 
 type InventoryCategoryGridCardProps = {
   item: InventoryItemCardItem
@@ -37,6 +38,7 @@ export default function InventoryCategoryGridCard({
   onUse,
   onUploadPhotos,
 }: InventoryCategoryGridCardProps) {
+  const { hidePrices } = useHidePrices()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const primaryPhoto = photos[0]
   const statusLabel = (item.status || "active").replace(/_/g, " ")
@@ -84,10 +86,12 @@ export default function InventoryCategoryGridCard({
               {item.quantity_type ? ` ${item.quantity_type}` : ""}
             </dd>
           </div>
-          <div>
-            <dt>Price</dt>
-            <dd>{formatCurrency(unitCost)}</dd>
-          </div>
+          {!hidePrices && (
+            <div>
+              <dt>Price</dt>
+              <dd>{formatCurrency(unitCost)}</dd>
+            </div>
+          )}
           <div>
             <dt>Status</dt>
             <dd className={`category-grid-card-status category-grid-card-status-${(item.status || "active").toLowerCase()}`}>

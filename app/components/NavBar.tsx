@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import { supabase } from "../../lib/supabaseClient"
 import { useAuth } from "./AuthProvider"
 import { isAdmin } from "../../lib/profiles"
+import HidePricesSwitch from "./HidePricesSwitch"
 
 export default function NavBar() {
   const pathname = usePathname()
@@ -18,8 +19,11 @@ export default function NavBar() {
 
   return (
     <div style={{ display: "grid", gap: "8px", justifyItems: "end" }}>
-      <div className="small" style={{ marginTop: 0 }}>
-        Signed in as {user.email}
+      <div className="nav-bar-meta">
+        <HidePricesSwitch />
+        <div className="small" style={{ marginTop: 0 }}>
+          Signed in as {user.email}
+        </div>
       </div>
       <nav className="nav-links" aria-label="Primary">
         <Link href="/" className={linkClass("/")}>

@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
-import Link from "next/link"
 import { supabase } from "../../lib/supabaseClient"
+import { useHidePrices } from "../components/HidePricesProvider"
 
 type UsageRow = {
   id: string
@@ -20,6 +20,7 @@ type Item = {
 }
 
 export default function JobsPage() {
+  const { hidePrices } = useHidePrices()
   const [usage, setUsage] = useState<UsageRow[]>([])
   const [items, setItems] = useState<Item[]>([])
   const [search, setSearch] = useState("")
@@ -85,19 +86,24 @@ export default function JobsPage() {
                 const cost = Number(item?.unit_cost || 0)
                 const value = cost * Number(u.quantity_used || 0)
 
-                total += value
+                if (!hidePrices) {
+                  total += value
+                }
 
                 return (
                   <div key={u.id} style={{ fontSize: "13px" }}>
                     • {item?.product_name || "Item"} — {u.quantity_used || 0}{" "}
-                    {item?.quantity_type || ""} — ${value.toFixed(0)}
+                    {item?.quantity_type || ""}
+                    {!hidePrices && <> — ${value.toFixed(0)}</>}
                   </div>
                 )
               })}
 
-              <div style={{ marginTop: "10px", fontWeight: "bold" }}>
-                Total: ${total.toFixed(0)}
-              </div>
+              {!hidePrices && (
+                <div style={{ marginTop: "10px", fontWeight: "bold" }}>
+                  Total: ${total.toFixed(0)}
+                </div>
+              )}
             </div>
           )
         })

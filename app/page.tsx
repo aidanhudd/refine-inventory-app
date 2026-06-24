@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
 import { useAuth } from "./components/AuthProvider"
+import { useHidePrices } from "./components/HidePricesProvider"
 import InventoryItemCard from "./components/InventoryItemCard"
 import InventoryCategoryGridCard from "./components/InventoryCategoryGridCard"
 import CategoryExpandedItemPanel from "./components/CategoryExpandedItemPanel"
@@ -177,6 +178,7 @@ const validateCategorySubcategory = (
 
 export default function Home() {
   const { user } = useAuth()
+  const { hidePrices } = useHidePrices()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [subcategories, setSubcategories] = useState<Subcategory[]>([])
@@ -1118,15 +1120,17 @@ const [useJob, setUseJob] = useState("")
 
   return (
   <main>
-      <div className="stats">
+      <div className={`stats ${hidePrices ? "stats-no-pricing" : ""}`}>
         <div className="stat">
           <div className="stat-label">Items</div>
           <div className="stat-value">{items.length}</div>
         </div>
-        <div className="stat">
-          <div className="stat-label">Inventory Value</div>
-          <div className="stat-value">${Math.round(totalValue).toLocaleString()}</div>
-        </div>
+        {!hidePrices && (
+          <div className="stat">
+            <div className="stat-label">Inventory Value</div>
+            <div className="stat-value">${Math.round(totalValue).toLocaleString()}</div>
+          </div>
+        )}
         <div className="stat">
           <div className="stat-label">Sold</div>
           <div className="stat-value">{soldCount}</div>
@@ -1340,15 +1344,17 @@ const [useJob, setUseJob] = useState("")
                         <span className="badge">No SKU</span>
                       </div>
                     </div>
-                    <div className="item-price">
-                      <div className="small" style={{ marginTop: 0 }}>Unit Cost</div>
-                      <input
-                        className="inline-input"
-                        type="number"
-                        value={inlineDraft.unit_cost}
-                        onChange={(e) => updateInlineDraft("unit_cost", e.target.value)}
-                      />
-                    </div>
+                    {!hidePrices && (
+                      <div className="item-price">
+                        <div className="small" style={{ marginTop: 0 }}>Unit Cost</div>
+                        <input
+                          className="inline-input"
+                          type="number"
+                          value={inlineDraft.unit_cost}
+                          onChange={(e) => updateInlineDraft("unit_cost", e.target.value)}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="item-kpis">
@@ -1398,12 +1404,14 @@ const [useJob, setUseJob] = useState("")
                   />
 
                   <div className="meta-grid">
-                    <div>
-                      <strong>Total Value:</strong>{" "}
-                      {formatCurrency(
-                        Number(inlineDraft.quantity_on_hand || 0) * Number(inlineDraft.unit_cost || 0),
-                      )}
-                    </div>
+                    {!hidePrices && (
+                      <div>
+                        <strong>Total Value:</strong>{" "}
+                        {formatCurrency(
+                          Number(inlineDraft.quantity_on_hand || 0) * Number(inlineDraft.unit_cost || 0),
+                        )}
+                      </div>
+                    )}
                     <div>
                       <strong>Status:</strong> active
                     </div>
