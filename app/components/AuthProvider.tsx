@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import type { User } from "@supabase/supabase-js"
+import { AUTH_INIT_TIMEOUT_MS, withTimeout } from "../../lib/asyncUtils"
 import { supabase } from "../../lib/supabaseClient"
 import { isUserRole, PROFILE_SELECT, type Profile } from "../../lib/profiles"
 
@@ -9,6 +10,7 @@ type AuthContextType = {
   user: User | null
   profile: Profile | null
   loading: boolean
+  authError: string | null
   refreshProfile: () => Promise<Profile | null>
 }
 
@@ -17,7 +19,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [sessionReady, setSessionReady] = useState(false)
+  const [profileReady, setProfileReady] = useState(true)
+  const [authError, setAuthError] = useState<string | null>(null)
 
   const loadProfile = useCallback(async (nextUser: User | null) => {
     if (!nextUser) {
@@ -31,9 +35,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .eq("id", nextUser.id)
       .maybeSingle()
 
+    if (error) {
+      console.error("[AuthProvider] profile lookup failed:", error)
+    }
+
     if (!data && !error) {
       const ensured = await supabase.rpc("ensure_user_profile")
-      if (!ensured.error && ensured.data) {
+      if (ensured.error) {
+        console.error("[AuthProvider] ensure_user_profile failed:", ensured.error)
+      } else if (ensured.data) {
         data = ensured.data as typeof data
         error = null
       }
@@ -64,44 +74,92 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true
 
-    const loadSession = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession()
+    const initSession = async () => {
+      try {
+        const { data, error } = await withTimeout(
+          supabase.auth.getSession(),
+          AUTH_INIT_TIMEOUT_MS,
+          "Supabase auth.getSession()",
+        )
 
-      if (!mounted) return
+        if (error) {
+          console.error("[AuthProvider] getSession returned error:", error)
+          if (mounted) setAuthError(error.message)
+        }
 
-      const nextUser = session?.user ?? null
-      setUser(nextUser)
-      await loadProfile(nextUser)
-      setLoading(false)
+        if (!mounted) return
+
+        setUser(data.session?.user ?? null)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unknown auth initialization error"
+        console.error("[AuthProvider] session initialization failed:", error)
+        if (mounted) {
+          setAuthError(message)
+          setUser(null)
+        }
+      } finally {
+        if (mounted) setSessionReady(true)
+      }
     }
 
-    loadSession()
+    void initSession()
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const nextUser = session?.user ?? null
-      setUser(nextUser)
-      await loadProfile(nextUser)
-      setLoading(false)
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return
+
+      // Never call other Supabase client methods here — it can deadlock getSession()
+      // in Chromium-based browsers (Edge, Chrome).
+      console.debug("[AuthProvider] auth state changed:", event)
+      setUser(session?.user ?? null)
+      setSessionReady(true)
+      setAuthError(null)
     })
 
     return () => {
       mounted = false
       subscription.unsubscribe()
     }
-  }, [loadProfile])
+  }, [])
+
+  useEffect(() => {
+    if (!sessionReady) return
+
+    if (!user) {
+      setProfile(null)
+      setProfileReady(true)
+      return
+    }
+
+    let mounted = true
+    setProfileReady(false)
+
+    void loadProfile(user)
+      .catch((error) => {
+        console.error("[AuthProvider] loadProfile threw:", error)
+        if (mounted) setProfile(null)
+      })
+      .finally(() => {
+        if (mounted) setProfileReady(true)
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [user, sessionReady, loadProfile])
+
+  const loading = !sessionReady || (!!user && !profileReady)
 
   const value = useMemo(
     () => ({
       user,
       profile,
       loading,
+      authError,
       refreshProfile,
     }),
-    [user, profile, loading, refreshProfile],
+    [user, profile, loading, authError, refreshProfile],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

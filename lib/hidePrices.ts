@@ -1,5 +1,6 @@
 import type { Profile } from "./profiles"
 import { hasAppAccess } from "./profiles"
+import { safeGetItem, safeSetItem } from "./storageSafe"
 
 export const HIDE_PRICES_SESSION_KEY = "hide-prices"
 
@@ -10,11 +11,9 @@ export function canUseHidePricesToggle(
 }
 
 export function readHidePricesPreference(): boolean {
-  if (typeof window === "undefined") return false
-  return window.sessionStorage.getItem(HIDE_PRICES_SESSION_KEY) === "1"
+  return safeGetItem("session", HIDE_PRICES_SESSION_KEY) === "1"
 }
 
 export function writeHidePricesPreference(hidePrices: boolean): void {
-  if (typeof window === "undefined") return
-  window.sessionStorage.setItem(HIDE_PRICES_SESSION_KEY, hidePrices ? "1" : "0")
+  safeSetItem("session", HIDE_PRICES_SESSION_KEY, hidePrices ? "1" : "0")
 }

@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
+import { safeGetItem, safeSetItem } from "../lib/storageSafe"
 import { useAuth } from "./components/AuthProvider"
 import { useHidePrices } from "./components/HidePricesProvider"
 import InventoryItemCard from "./components/InventoryItemCard"
@@ -220,7 +221,7 @@ const [useJob, setUseJob] = useState("")
   }, [])
 
   useEffect(() => {
-    const stored = localStorage.getItem(INVENTORY_VIEW_STORAGE_KEY)
+    const stored = safeGetItem("local", INVENTORY_VIEW_STORAGE_KEY)
     if (stored === "list" || stored === "category") {
       setInventoryViewMode(stored)
     }
@@ -230,29 +231,51 @@ const [useJob, setUseJob] = useState("")
     setLoading(true)
     setErrorMessage("")
 
-    const [itemsRes, categoriesRes, subcategoriesRes, quantityTypesRes, usageRes] = await Promise.all([
-      supabase.from("inventory_items").select("*").order("created_at", { ascending: false }),
-      supabase.from("categories").select("*").order("name", { ascending: true }),
-      supabase.from("subcategories").select("*").order("name", { ascending: true }),
-      supabase.from("quantity_types").select("*").order("name", { ascending: true }),
-      supabase.from("inventory_usage").select("*").order("used_at", { ascending: false }),
-    ])
+    try {
+      const [itemsRes, categoriesRes, subcategoriesRes, quantityTypesRes, usageRes] = await Promise.all([
+        supabase.from("inventory_items").select("*").order("created_at", { ascending: false }),
+        supabase.from("categories").select("*").order("name", { ascending: true }),
+        supabase.from("subcategories").select("*").order("name", { ascending: true }),
+        supabase.from("quantity_types").select("*").order("name", { ascending: true }),
+        supabase.from("inventory_usage").select("*").order("used_at", { ascending: false }),
+      ])
 
-    if (itemsRes.error) setErrorMessage(getActionableSupabaseError(itemsRes.error.message))
-    if (categoriesRes.error) setErrorMessage(categoriesRes.error.message)
-    if (subcategoriesRes.error) setErrorMessage(getActionableSupabaseError(subcategoriesRes.error.message))
-    if (quantityTypesRes.error) setErrorMessage(quantityTypesRes.error.message)
-    if (usageRes.error) setErrorMessage(usageRes.error.message)
+      if (itemsRes.error) {
+        console.error("[Inventory] inventory_items load failed:", itemsRes.error)
+        setErrorMessage(getActionableSupabaseError(itemsRes.error.message))
+      }
+      if (categoriesRes.error) {
+        console.error("[Inventory] categories load failed:", categoriesRes.error)
+        setErrorMessage(categoriesRes.error.message)
+      }
+      if (subcategoriesRes.error) {
+        console.error("[Inventory] subcategories load failed:", subcategoriesRes.error)
+        setErrorMessage(getActionableSupabaseError(subcategoriesRes.error.message))
+      }
+      if (quantityTypesRes.error) {
+        console.error("[Inventory] quantity_types load failed:", quantityTypesRes.error)
+        setErrorMessage(quantityTypesRes.error.message)
+      }
+      if (usageRes.error) {
+        console.error("[Inventory] inventory_usage load failed:", usageRes.error)
+        setErrorMessage(usageRes.error.message)
+      }
 
-    const loadedItems = (itemsRes.data || []).map((item) => normalizeInventoryItem(item as InventoryItem))
-    setItems(loadedItems)
-    setCategories(categoriesRes.data || [])
-    setSubcategories(subcategoriesRes.data || [])
-    setQuantityTypes(quantityTypesRes.data || [])
-    setUsageList((usageRes.data as UsageRow[]) || [])
+      const loadedItems = (itemsRes.data || []).map((item) => normalizeInventoryItem(item as InventoryItem))
+      setItems(loadedItems)
+      setCategories(categoriesRes.data || [])
+      setSubcategories(subcategoriesRes.data || [])
+      setQuantityTypes(quantityTypesRes.data || [])
+      setUsageList((usageRes.data as UsageRow[]) || [])
 
-    await loadPhotosForItems(loadedItems)
-    setLoading(false)
+      await loadPhotosForItems(loadedItems)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load inventory"
+      console.error("[Inventory] loadAll failed:", error)
+      setErrorMessage(message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const settingMatsCategory = useMemo(
@@ -981,7 +1004,7 @@ const [useJob, setUseJob] = useState("")
 
   const setViewMode = (mode: InventoryViewMode) => {
     setInventoryViewMode(mode)
-    localStorage.setItem(INVENTORY_VIEW_STORAGE_KEY, mode)
+    safeSetItem("local", INVENTORY_VIEW_STORAGE_KEY, mode)
     if (mode === "list") {
       setCategoryExpandedItemId(null)
     }

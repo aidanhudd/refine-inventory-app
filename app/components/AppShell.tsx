@@ -9,7 +9,7 @@ import { hasAppAccess, isAdmin } from "../../lib/profiles"
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading, authError } = useAuth()
 
   const isLoginRoute = pathname === "/login"
   const isPendingRoute = pathname === "/pending"
@@ -19,7 +19,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const admin = isAdmin(role) && profile?.approved === true
 
   useEffect(() => {
-    if (loading) return
+    if (loading || authError) return
 
     if (!user && !isLoginRoute) {
       router.replace("/login")
@@ -46,12 +46,42 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     if (isAdminRoute && !admin) {
       router.replace("/")
     }
-  }, [loading, user, isLoginRoute, isPendingRoute, isAdminRoute, canAccessApp, admin, router])
+  }, [loading, authError, user, isLoginRoute, isPendingRoute, isAdminRoute, canAccessApp, admin, router])
 
   if (loading) {
     return (
       <main>
         <div className="empty">Checking your session...</div>
+      </main>
+    )
+  }
+
+  if (authError) {
+    return (
+      <main>
+        <section className="card auth-error-card">
+          <h2>Could not start the app</h2>
+          <p className="subtext">
+            Session verification failed. This can happen when browser storage is blocked or the auth
+            service is slow to respond.
+          </p>
+          <div className="notice page-feedback">{authError}</div>
+          <p className="small">
+            Open the browser developer console for the full error details, then try again.
+          </p>
+          <div className="action-row">
+            <button type="button" className="btn-primary btn-small" onClick={() => window.location.reload()}>
+              Retry
+            </button>
+            <button
+              type="button"
+              className="btn-secondary btn-small"
+              onClick={() => router.replace("/login")}
+            >
+              Go to sign in
+            </button>
+          </div>
+        </section>
       </main>
     )
   }
