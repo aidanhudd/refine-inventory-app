@@ -58,7 +58,7 @@ export default function LoginPage() {
     }
 
     setSuccessMessage(
-      "Account created. If email confirmation is enabled, check your inbox before signing in."
+      "Account created. If email confirmation is enabled, check your inbox before signing in. After you sign in, an admin must approve your account before you can access inventory."
     )
     setLoading(false)
   }
@@ -69,8 +69,8 @@ export default function LoginPage() {
         <h2>{mode === "signin" ? "Sign in" : "Create account"}</h2>
         <p className="subtext" style={{ marginBottom: "16px" }}>
           {mode === "signin"
-            ? "Use your Supabase Auth email and password to access inventory."
-            : "Create a Supabase Auth account to get access to inventory."}
+            ? "Use your email and password to sign in."
+            : "Create an account with your work email. An administrator must approve you before you can access inventory."}
         </p>
 
         {successMessage && <div className="success">{successMessage}</div>}

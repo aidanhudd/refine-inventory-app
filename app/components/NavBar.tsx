@@ -4,10 +4,12 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { supabase } from "../../lib/supabaseClient"
 import { useAuth } from "./AuthProvider"
+import { isAdmin } from "../../lib/profiles"
 
 export default function NavBar() {
   const pathname = usePathname()
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
+  const admin = isAdmin(profile?.role)
 
   const linkClass = (path: string) =>
     pathname === path ? "nav-link nav-link-active" : "nav-link"
@@ -31,6 +33,12 @@ export default function NavBar() {
         <Link href="/estimate" className={linkClass("/estimate")}>
           Estimate
         </Link>
+
+        {admin && (
+          <Link href="/admin/users" className={linkClass("/admin/users")}>
+            Admin
+          </Link>
+        )}
 
         <button
           className="btn-secondary btn-small"
