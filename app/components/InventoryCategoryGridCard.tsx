@@ -1,6 +1,6 @@
 "use client"
 
-import { ChangeEvent, useRef } from "react"
+import { ChangeEvent, KeyboardEvent, MouseEvent, useRef } from "react"
 import type { InventoryItemCardItem } from "./InventoryItemCard"
 
 type InventoryCategoryGridCardProps = {
@@ -10,12 +10,16 @@ type InventoryCategoryGridCardProps = {
   photos: string[]
   formatCurrency: (value: number) => string
   isUploadingPhotos: boolean
+  onOpenDetail: () => void
   onStartEdit: () => void
   onMarkSold: () => void
   onDelete: () => void
   onUse: () => void
   onUploadPhotos: (e: ChangeEvent<HTMLInputElement>) => void
-  onPhotoClick: (url: string) => void
+}
+
+const stopClick = (e: MouseEvent | KeyboardEvent) => {
+  e.stopPropagation()
 }
 
 export default function InventoryCategoryGridCard({
@@ -25,12 +29,12 @@ export default function InventoryCategoryGridCard({
   photos,
   formatCurrency,
   isUploadingPhotos,
+  onOpenDetail,
   onStartEdit,
   onMarkSold,
   onDelete,
   onUse,
   onUploadPhotos,
-  onPhotoClick,
 }: InventoryCategoryGridCardProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const primaryPhoto = photos[0]
@@ -38,22 +42,30 @@ export default function InventoryCategoryGridCard({
   const qty = Number(item.quantity_on_hand || 0)
   const unitCost = Number(item.unit_cost || 0)
 
+  const handleCardKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault()
+      onOpenDetail()
+    }
+  }
+
   return (
-    <article className="category-grid-card">
-      <button
-        type="button"
-        className="category-grid-card-photo-wrap"
-        onClick={() => primaryPhoto && onPhotoClick(primaryPhoto)}
-        disabled={!primaryPhoto}
-        aria-label={primaryPhoto ? `View photo for ${item.product_name || "item"}` : "No photo available"}
-      >
+    <article
+      className="category-grid-card category-grid-card-clickable"
+      onClick={onOpenDetail}
+      onKeyDown={handleCardKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={`View details for ${item.product_name || "item"}`}
+    >
+      <div className="category-grid-card-photo-wrap" aria-hidden="true">
         {primaryPhoto ? (
-          <img src={primaryPhoto} alt={item.product_name || "Inventory item"} className="category-grid-card-photo" />
+          <img src={primaryPhoto} alt="" className="category-grid-card-photo" />
         ) : (
           <span className="category-grid-card-photo-empty">No photo</span>
         )}
         {photos.length > 1 && <span className="category-grid-card-photo-count">+{photos.length - 1}</span>}
-      </button>
+      </div>
 
       <div className="category-grid-card-body">
         <h4 className="category-grid-card-name">{item.product_name || "Untitled Item"}</h4>
@@ -83,24 +95,55 @@ export default function InventoryCategoryGridCard({
           </div>
         </dl>
 
-        <div className="category-grid-card-actions">
-          <button type="button" className="btn-edit btn-small" onClick={onStartEdit}>
+        <div className="category-grid-card-actions" onClick={stopClick} onKeyDown={stopClick}>
+          <button
+            type="button"
+            className="btn-edit btn-small"
+            onClick={(e) => {
+              stopClick(e)
+              onStartEdit()
+            }}
+          >
             Edit
           </button>
-          <button type="button" className="btn-secondary btn-small" onClick={onUse}>
+          <button
+            type="button"
+            className="btn-secondary btn-small"
+            onClick={(e) => {
+              stopClick(e)
+              onUse()
+            }}
+          >
             Use
           </button>
-          <button type="button" className="btn-secondary btn-small" onClick={onMarkSold}>
+          <button
+            type="button"
+            className="btn-secondary btn-small"
+            onClick={(e) => {
+              stopClick(e)
+              onMarkSold()
+            }}
+          >
             Sold
           </button>
-          <button type="button" className="btn-danger btn-small" onClick={onDelete}>
+          <button
+            type="button"
+            className="btn-danger btn-small"
+            onClick={(e) => {
+              stopClick(e)
+              onDelete()
+            }}
+          >
             Delete
           </button>
           <button
             type="button"
             className="btn-secondary btn-small"
             disabled={isUploadingPhotos}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={(e) => {
+              stopClick(e)
+              fileInputRef.current?.click()
+            }}
           >
             {isUploadingPhotos ? "Uploading…" : "Photo"}
           </button>
@@ -111,6 +154,7 @@ export default function InventoryCategoryGridCard({
             accept="image/*"
             className="category-grid-card-file-input"
             onChange={onUploadPhotos}
+            onClick={stopClick}
           />
         </div>
       </div>

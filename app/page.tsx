@@ -173,6 +173,7 @@ const [useJob, setUseJob] = useState("")
   const [settingMatsBootstrapping, setSettingMatsBootstrapping] = useState(false)
   const [inventoryViewMode, setInventoryViewMode] = useState<InventoryViewMode>("list")
   const [collapsedBrowseGroups, setCollapsedBrowseGroups] = useState<Set<string>>(() => new Set())
+  const [categoryExpandedItemId, setCategoryExpandedItemId] = useState<string | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -388,11 +389,16 @@ const [useJob, setUseJob] = useState("")
     return groups
   }, [filteredItems, categoryNameById, subcategoryNameById])
 
+  useEffect(() => {
+    if (categoryExpandedItemId && !filteredItems.some((item) => item.id === categoryExpandedItemId)) {
+      setCategoryExpandedItemId(null)
+    }
+  }, [filteredItems, categoryExpandedItemId])
+
   const hasSelectedInventoryView = useMemo(() => {
-    if (isCategoryView) return true
     if (categoryFilter === "all") return true
     return categories.some((category) => category.id === categoryFilter)
-  }, [isCategoryView, categoryFilter, categories])
+  }, [categoryFilter, categories])
 
   const selectedCategoryName = useMemo(() => {
     if (categoryFilter === "all") return "All Inventory"
@@ -690,6 +696,10 @@ const [useJob, setUseJob] = useState("")
       cancelInlineEdit()
     }
 
+    if (categoryExpandedItemId === id) {
+      setCategoryExpandedItemId(null)
+    }
+
     setMessage("Item deleted.")
   }
 
@@ -892,10 +902,17 @@ const [useJob, setUseJob] = useState("")
   const setViewMode = (mode: InventoryViewMode) => {
     setInventoryViewMode(mode)
     localStorage.setItem(INVENTORY_VIEW_STORAGE_KEY, mode)
-    if (mode === "category") {
-      if (categoryFilter !== "all") selectCategory("all")
-      setCategoryPickerCollapsed(true)
+    if (mode === "list") {
+      setCategoryExpandedItemId(null)
     }
+  }
+
+  const openCategoryItemDetail = (itemId: string) => {
+    setCategoryExpandedItemId(itemId)
+  }
+
+  const closeCategoryItemDetail = () => {
+    setCategoryExpandedItemId(null)
   }
 
   const toggleBrowseGroup = (groupKey: string) => {
@@ -926,85 +943,64 @@ const [useJob, setUseJob] = useState("")
     }))
   }
 
-  const renderInventoryItem = (item: InventoryItem) => {
+  const buildInventoryItemCardProps = (item: InventoryItem) => {
     const isInlineEditing = inlineEditingId === item.id && !!inlineDraft
 
-    return (
-      <InventoryItemCard
-        key={item.id}
-        item={item}
-        categoryName={item.category_id ? categoryNameById.get(item.category_id) || "" : ""}
-        subcategoryName={item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) || "" : ""}
-        isInlineEditing={isInlineEditing}
-        inlineDraft={isInlineEditing ? inlineDraft : null}
-        inlineSaving={inlineSaving}
-        categories={categories}
-        subcategories={subcategories}
-        quantityTypes={quantityTypes}
-        photos={photoMap[item.id] || []}
-        itemUsage={usageList.filter((usage) => usage.item_id === item.id).slice(0, 5)}
-        showSoldUndo={!!soldUndoMap[item.id]}
-        isUploadingPhotos={uploadingItemId === item.id}
-        formatCurrency={formatCurrency}
-        onUpdateDraft={updateInlineDraft}
-        onSave={() => void saveInlineEdit(item)}
-        onCancel={cancelInlineEdit}
-        onStartEdit={() => startInlineEdit(item)}
-        onMarkSold={() => void markSold(item.id)}
-        onUndoMarkSold={() => void undoMarkSold(item.id)}
-        onDelete={() => void deleteItem(item.id)}
-        onUse={() => {
-          setSelectedItem(item)
-          setUseModalOpen(true)
-        }}
-        onUndoUsage={(usageId, qty) => void undoUsage(usageId, item.id, qty)}
-        onUploadPhotos={(e) => void uploadMorePhotos(item.id, e)}
-        onPhotoClick={setActiveImage}
-        onPhotoDelete={(url) => void deleteItemPhoto(item.id, url)}
-      />
-    )
+    return {
+      item,
+      categoryName: item.category_id ? categoryNameById.get(item.category_id) || "" : "",
+      subcategoryName: item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) || "" : "",
+      isInlineEditing,
+      inlineDraft: isInlineEditing ? inlineDraft : null,
+      inlineSaving,
+      categories,
+      subcategories,
+      quantityTypes,
+      photos: photoMap[item.id] || [],
+      itemUsage: usageList.filter((usage) => usage.item_id === item.id).slice(0, 5),
+      showSoldUndo: !!soldUndoMap[item.id],
+      isUploadingPhotos: uploadingItemId === item.id,
+      formatCurrency,
+      onUpdateDraft: updateInlineDraft,
+      onSave: () => void saveInlineEdit(item),
+      onCancel: cancelInlineEdit,
+      onStartEdit: () => startInlineEdit(item),
+      onMarkSold: () => void markSold(item.id),
+      onUndoMarkSold: () => void undoMarkSold(item.id),
+      onDelete: () => void deleteItem(item.id),
+      onUse: () => {
+        setSelectedItem(item)
+        setUseModalOpen(true)
+      },
+      onUndoUsage: (usageId: string, qty: number) => void undoUsage(usageId, item.id, qty),
+      onUploadPhotos: (e: ChangeEvent<HTMLInputElement>) => void uploadMorePhotos(item.id, e),
+      onPhotoClick: setActiveImage,
+      onPhotoDelete: (url: string) => void deleteItemPhoto(item.id, url),
+    }
   }
+
+  const renderInventoryItem = (item: InventoryItem) => (
+    <InventoryItemCard key={item.id} {...buildInventoryItemCardProps(item)} />
+  )
 
   const renderCategoryGridItem = (item: InventoryItem) => {
     const isInlineEditing = inlineEditingId === item.id && !!inlineDraft
+    const isExpanded = categoryExpandedItemId === item.id
     const categoryName = item.category_id ? categoryNameById.get(item.category_id) || "" : ""
     const subcategoryName = item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) || "" : ""
     const photos = photoMap[item.id] || []
 
-    if (isInlineEditing) {
+    if (isInlineEditing || isExpanded) {
       return (
-        <div key={item.id} className="category-grid-item-full">
-          <InventoryItemCard
-            item={item}
-            categoryName={categoryName}
-            subcategoryName={subcategoryName}
-            isInlineEditing
-            inlineDraft={inlineDraft}
-            inlineSaving={inlineSaving}
-            categories={categories}
-            subcategories={subcategories}
-            quantityTypes={quantityTypes}
-            photos={photos}
-            itemUsage={usageList.filter((usage) => usage.item_id === item.id).slice(0, 5)}
-            showSoldUndo={!!soldUndoMap[item.id]}
-            isUploadingPhotos={uploadingItemId === item.id}
-            formatCurrency={formatCurrency}
-            onUpdateDraft={updateInlineDraft}
-            onSave={() => void saveInlineEdit(item)}
-            onCancel={cancelInlineEdit}
-            onStartEdit={() => startInlineEdit(item)}
-            onMarkSold={() => void markSold(item.id)}
-            onUndoMarkSold={() => void undoMarkSold(item.id)}
-            onDelete={() => void deleteItem(item.id)}
-            onUse={() => {
-              setSelectedItem(item)
-              setUseModalOpen(true)
-            }}
-            onUndoUsage={(usageId, qty) => void undoUsage(usageId, item.id, qty)}
-            onUploadPhotos={(e) => void uploadMorePhotos(item.id, e)}
-            onPhotoClick={setActiveImage}
-            onPhotoDelete={(url) => void deleteItemPhoto(item.id, url)}
-          />
+        <div key={item.id} className="inventory-item-grid-full category-expanded-card">
+          {isExpanded && !isInlineEditing && (
+            <div className="category-expanded-card-toolbar">
+              <button type="button" className="btn-secondary btn-small" onClick={closeCategoryItemDetail}>
+                Close
+              </button>
+            </div>
+          )}
+          <InventoryItemCard {...buildInventoryItemCardProps(item)} />
         </div>
       )
     }
@@ -1018,6 +1014,7 @@ const [useJob, setUseJob] = useState("")
         photos={photos}
         formatCurrency={formatCurrency}
         isUploadingPhotos={uploadingItemId === item.id}
+        onOpenDetail={() => openCategoryItemDetail(item.id)}
         onStartEdit={() => startInlineEdit(item)}
         onMarkSold={() => void markSold(item.id)}
         onDelete={() => void deleteItem(item.id)}
@@ -1026,7 +1023,6 @@ const [useJob, setUseJob] = useState("")
           setUseModalOpen(true)
         }}
         onUploadPhotos={(e) => void uploadMorePhotos(item.id, e)}
-        onPhotoClick={setActiveImage}
       />
     )
   }
@@ -1082,8 +1078,6 @@ const [useJob, setUseJob] = useState("")
             </button>
           </div>
 
-          {!isCategoryView && (
-          <>
           <div className={`category-picker-card ${categoryPickerCollapsed ? "category-picker-collapsed" : ""}`}>
             <div className="category-picker-top">
               <div className="category-picker-header">
@@ -1200,8 +1194,6 @@ const [useJob, setUseJob] = useState("")
                 ))}
               </div>
             </div>
-          )}
-          </>
           )}
 
           {loading ? (
@@ -1402,7 +1394,7 @@ const [useJob, setUseJob] = useState("")
                                     </span>
                                   </button>
                                   {!subCollapsed && (
-                                    <div className="category-grid browse-subcategory-items">
+                                    <div className="inventory-item-grid browse-subcategory-items">
                                       {subGroup.items.map(renderCategoryGridItem)}
                                     </div>
                                   )}
