@@ -1,6 +1,6 @@
 "use client"
 
-import { ChangeEvent, useEffect, useMemo, useState } from "react"
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
 import { useAuth } from "./components/AuthProvider"
 import InventoryItemCard from "./components/InventoryItemCard"
@@ -12,6 +12,7 @@ import {
   calculateSquareFeetFromStrings,
   categoryIdSupportsDimensions,
   formatSquareFeetNumber,
+  normalizeDimensionValue,
 } from "../lib/inventoryDimensions"
 
 type Category = {
@@ -119,6 +120,13 @@ type InventoryCategoryGroup = {
 const UNCategorized_CATEGORY_KEY = "__uncategorized__"
 const NO_SUBCATEGORY_KEY = "__none__"
 
+const normalizeInventoryItem = (item: InventoryItem): InventoryItem => ({
+  ...item,
+  length_inches: normalizeDimensionValue(item.length_inches),
+  width_inches: normalizeDimensionValue(item.width_inches),
+  square_feet: normalizeDimensionValue(item.square_feet),
+})
+
 const getActionableSupabaseError = (message: string) => {
   const lower = message.toLowerCase()
 
@@ -199,6 +207,11 @@ const [useJob, setUseJob] = useState("")
   const [inventoryViewMode, setInventoryViewMode] = useState<InventoryViewMode>("list")
   const [collapsedBrowseGroups, setCollapsedBrowseGroups] = useState<Set<string>>(() => new Set())
   const [categoryExpandedItemId, setCategoryExpandedItemId] = useState<string | null>(null)
+  const inlineDraftRef = useRef<InlineEditForm | null>(null)
+
+  useEffect(() => {
+    inlineDraftRef.current = inlineDraft
+  }, [inlineDraft])
 
   useEffect(() => {
     loadAll()
@@ -229,7 +242,7 @@ const [useJob, setUseJob] = useState("")
     if (quantityTypesRes.error) setErrorMessage(quantityTypesRes.error.message)
     if (usageRes.error) setErrorMessage(usageRes.error.message)
 
-    const loadedItems = itemsRes.data || []
+    const loadedItems = (itemsRes.data || []).map((item) => normalizeInventoryItem(item as InventoryItem))
     setItems(loadedItems)
     setCategories(categoriesRes.data || [])
     setSubcategories(subcategoriesRes.data || [])
@@ -596,16 +609,17 @@ const [useJob, setUseJob] = useState("")
   }
 
   const saveNewItem = async () => {
-    if (!inlineDraft) return
+    const draft = inlineDraftRef.current
+    if (!draft) return
 
-    if (!inlineDraft.product_name.trim()) {
+    if (!draft.product_name.trim()) {
       setErrorMessage("Product name is required.")
       return
     }
 
     const categoryValidationError = validateCategorySubcategory(
-      inlineDraft.category_id,
-      inlineDraft.subcategory_id,
+      draft.category_id,
+      draft.subcategory_id,
       subcategories,
     )
     if (categoryValidationError) {
@@ -618,22 +632,23 @@ const [useJob, setUseJob] = useState("")
     setMessage("")
 
     const dimensions = buildDimensionPayload(
-      inlineDraft.category_id,
+      draft.category_id,
       categories,
-      inlineDraft.length_inches,
-      inlineDraft.width_inches,
+      draft.length_inches,
+      draft.width_inches,
+      draft.square_feet,
     )
 
     const payload = {
       sku: null,
-      product_name: inlineDraft.product_name,
-      category_id: inlineDraft.category_id || null,
-      subcategory_id: inlineDraft.subcategory_id || null,
-      quantity_on_hand: Number(inlineDraft.quantity_on_hand || 0),
-      quantity_type: inlineDraft.quantity_type || null,
-      unit_cost: Number(inlineDraft.unit_cost || 0),
-      warehouse_location: inlineDraft.warehouse_location || null,
-      notes: inlineDraft.notes || null,
+      product_name: draft.product_name,
+      category_id: draft.category_id || null,
+      subcategory_id: draft.subcategory_id || null,
+      quantity_on_hand: Number(draft.quantity_on_hand || 0),
+      quantity_type: draft.quantity_type || null,
+      unit_cost: Number(draft.unit_cost || 0),
+      warehouse_location: draft.warehouse_location || null,
+      notes: draft.notes || null,
       status: "active",
       ...dimensions,
     }
@@ -653,11 +668,11 @@ const [useJob, setUseJob] = useState("")
           setPhotoMap((prev) => ({ ...prev, [data.id]: uploadedUrls }))
         }
       }
-      setItems((prev) => [data as InventoryItem, ...prev])
+      setItems((prev) => [normalizeInventoryItem(data as InventoryItem), ...prev])
       setMessage("Item saved successfully.")
       cancelInlineEdit()
     } catch (uploadError: any) {
-      setItems((prev) => [data as InventoryItem, ...prev])
+      setItems((prev) => [normalizeInventoryItem(data as InventoryItem), ...prev])
       setErrorMessage(`Item saved, but photo upload failed: ${uploadError.message}`)
       cancelInlineEdit()
     }
@@ -666,16 +681,17 @@ const [useJob, setUseJob] = useState("")
   }
 
   const saveInlineEdit = async (item: InventoryItem) => {
-    if (!inlineDraft) return
+    const draft = inlineDraftRef.current
+    if (!draft) return
 
-    if (!inlineDraft.product_name.trim()) {
+    if (!draft.product_name.trim()) {
       setErrorMessage("Product name is required.")
       return
     }
 
     const categoryValidationError = validateCategorySubcategory(
-      inlineDraft.category_id,
-      inlineDraft.subcategory_id,
+      draft.category_id,
+      draft.subcategory_id,
       subcategories,
     )
     if (categoryValidationError) {
@@ -688,21 +704,22 @@ const [useJob, setUseJob] = useState("")
     setMessage("")
 
     const dimensions = buildDimensionPayload(
-      inlineDraft.category_id,
+      draft.category_id,
       categories,
-      inlineDraft.length_inches,
-      inlineDraft.width_inches,
+      draft.length_inches,
+      draft.width_inches,
+      draft.square_feet,
     )
 
     const payload = {
-      product_name: inlineDraft.product_name,
-      category_id: inlineDraft.category_id || null,
-      subcategory_id: inlineDraft.subcategory_id || null,
-      quantity_on_hand: Number(inlineDraft.quantity_on_hand || 0),
-      quantity_type: inlineDraft.quantity_type || null,
-      unit_cost: Number(inlineDraft.unit_cost || 0),
-      warehouse_location: inlineDraft.warehouse_location || null,
-      notes: inlineDraft.notes || null,
+      product_name: draft.product_name,
+      category_id: draft.category_id || null,
+      subcategory_id: draft.subcategory_id || null,
+      quantity_on_hand: Number(draft.quantity_on_hand || 0),
+      quantity_type: draft.quantity_type || null,
+      unit_cost: Number(draft.unit_cost || 0),
+      warehouse_location: draft.warehouse_location || null,
+      notes: draft.notes || null,
       ...dimensions,
     }
 
@@ -719,10 +736,13 @@ const [useJob, setUseJob] = useState("")
       return
     }
 
+    const savedItem = normalizeInventoryItem({
+      ...(updatedItem as InventoryItem),
+      ...dimensions,
+    })
+
     setItems((prev) =>
-      prev.map((existingItem) =>
-        existingItem.id === item.id ? ({ ...existingItem, ...updatedItem } as InventoryItem) : existingItem
-      )
+      prev.map((existingItem) => (existingItem.id === item.id ? savedItem : existingItem)),
     )
     setMessage("Item updated successfully.")
     cancelInlineEdit()

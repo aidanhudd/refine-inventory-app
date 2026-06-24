@@ -238,9 +238,9 @@ export default function InventoryItemCard({
       <ItemDimensionsFields
         categoryId={isInlineEditing && inlineDraft ? inlineDraft.category_id : item.category_id || ""}
         categories={categories}
-        lengthInches={inlineDraft?.length_inches || ""}
-        widthInches={inlineDraft?.width_inches || ""}
-        squareFeet={inlineDraft?.square_feet || ""}
+        lengthInches={isInlineEditing && inlineDraft ? inlineDraft.length_inches : ""}
+        widthInches={isInlineEditing && inlineDraft ? inlineDraft.width_inches : ""}
+        squareFeet={isInlineEditing && inlineDraft ? inlineDraft.square_feet : ""}
         isEditing={!!(isInlineEditing && inlineDraft)}
         onUpdate={onUpdateDraft}
         storedLengthInches={item.length_inches}

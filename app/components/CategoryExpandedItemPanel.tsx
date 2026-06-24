@@ -46,6 +46,10 @@ export default function CategoryExpandedItemPanel({
   onPhotoDelete,
   onClose,
   isInlineEditing,
+  inlineDraft,
+  onUpdateDraft,
+  onSave,
+  onCancel,
   ...cardProps
 }: CategoryExpandedItemPanelProps) {
   const primaryPhoto = photos[0]
@@ -106,6 +110,10 @@ export default function CategoryExpandedItemPanel({
             {...cardProps}
             photos={photos}
             isInlineEditing={isInlineEditing}
+            inlineDraft={inlineDraft}
+            onUpdateDraft={onUpdateDraft}
+            onSave={onSave}
+            onCancel={onCancel}
             onPhotoClick={onPhotoClick}
             onPhotoDelete={onPhotoDelete}
             suppressPhotoGallery
