@@ -52,13 +52,11 @@ export default function CategoryExpandedItemPanel({
 
   return (
     <div className="category-expanded-card">
-      {!isInlineEditing && (
-        <div className="category-expanded-card-toolbar">
-          <button type="button" className="btn-secondary btn-small" onClick={onClose}>
-            Close
-          </button>
-        </div>
-      )}
+      <div className="category-expanded-card-toolbar">
+        <button type="button" className="btn-secondary btn-small" onClick={onClose}>
+          Close
+        </button>
+      </div>
 
       <div className="category-expanded-layout">
         <div className="category-expanded-photo">

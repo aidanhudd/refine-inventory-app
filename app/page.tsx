@@ -973,6 +973,16 @@ const [useJob, setUseJob] = useState("")
     setCategoryExpandedItemId(null)
   }
 
+  const handleCloseCategoryItem = () => {
+    cancelInlineEdit()
+    closeCategoryItemDetail()
+  }
+
+  const startCategoryInlineEdit = (item: InventoryItem) => {
+    openCategoryItemDetail(item.id)
+    startInlineEdit(item)
+  }
+
   const toggleBrowseGroup = (groupKey: string) => {
     setCollapsedBrowseGroups((prev) => {
       const next = new Set(prev)
@@ -1048,7 +1058,7 @@ const [useJob, setUseJob] = useState("")
     const subcategoryName = item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) || "" : ""
     const photos = photoMap[item.id] || []
 
-    if (isExpanded) {
+    if (isExpanded || isInlineEditing) {
       const cardProps = buildInventoryItemCardProps(item)
 
       return (
@@ -1058,16 +1068,8 @@ const [useJob, setUseJob] = useState("")
             photos={photos}
             categoryName={categoryName}
             subcategoryName={subcategoryName}
-            onClose={closeCategoryItemDetail}
+            onClose={handleCloseCategoryItem}
           />
-        </div>
-      )
-    }
-
-    if (isInlineEditing) {
-      return (
-        <div key={item.id} className="inventory-item-grid-full">
-          <InventoryItemCard {...buildInventoryItemCardProps(item)} />
         </div>
       )
     }
@@ -1082,7 +1084,7 @@ const [useJob, setUseJob] = useState("")
         formatCurrency={formatCurrency}
         isUploadingPhotos={uploadingItemId === item.id}
         onOpenDetail={() => openCategoryItemDetail(item.id)}
-        onStartEdit={() => startInlineEdit(item)}
+        onStartEdit={() => startCategoryInlineEdit(item)}
         onMarkSold={() => void markSold(item.id)}
         onDelete={() => void deleteItem(item.id)}
         onUse={() => {
