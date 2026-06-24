@@ -25,11 +25,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return null
     }
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("profiles")
       .select(PROFILE_SELECT)
       .eq("id", nextUser.id)
       .maybeSingle()
+
+    if (!data && !error) {
+      const ensured = await supabase.rpc("ensure_user_profile")
+      if (!ensured.error && ensured.data) {
+        data = ensured.data as typeof data
+        error = null
+      }
+    }
 
     if (error || !data) {
       setProfile(null)
@@ -40,6 +48,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       id: data.id,
       email: data.email ?? nextUser.email ?? null,
       role: isUserRole(data.role) ? data.role : "pending",
+      approved: data.approved === true,
       approved_at: data.approved_at ?? null,
       approved_by: data.approved_by ?? null,
       full_name: data.full_name ?? null,

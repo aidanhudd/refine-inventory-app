@@ -15,8 +15,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const isPendingRoute = pathname === "/pending"
   const isAdminRoute = pathname.startsWith("/admin")
   const role = profile?.role ?? "pending"
-  const canAccessApp = hasAppAccess(role)
-  const admin = isAdmin(role)
+  const canAccessApp = hasAppAccess(profile)
+  const admin = isAdmin(role) && profile?.approved === true
 
   useEffect(() => {
     if (loading) return

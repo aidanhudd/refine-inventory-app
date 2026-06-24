@@ -9,7 +9,7 @@ import { isAdmin } from "../../lib/profiles"
 export default function NavBar() {
   const pathname = usePathname()
   const { user, profile } = useAuth()
-  const admin = isAdmin(profile?.role)
+  const admin = isAdmin(profile?.role) && profile?.approved === true
 
   const linkClass = (path: string) =>
     pathname === path ? "nav-link nav-link-active" : "nav-link"

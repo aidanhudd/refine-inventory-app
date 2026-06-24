@@ -41,6 +41,7 @@ export default function AdminUsersPage() {
         id: row.id,
         email: row.email ?? null,
         role: isUserRole(row.role) ? row.role : "pending",
+        approved: row.approved === true,
         approved_at: row.approved_at ?? null,
         approved_by: row.approved_by ?? null,
         full_name: row.full_name ?? null,
@@ -63,11 +64,13 @@ export default function AdminUsersPage() {
       nextRole === "pending"
         ? {
             role: "pending",
+            approved: false,
             approved_at: null,
             approved_by: null,
           }
         : {
             role: nextRole,
+            approved: true,
             approved_at: new Date().toISOString(),
             approved_by: user?.id ?? null,
           }

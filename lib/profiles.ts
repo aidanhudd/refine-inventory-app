@@ -12,20 +12,29 @@ export type Profile = {
   id: string
   email: string | null
   role: UserRole
+  approved: boolean
   approved_at: string | null
   approved_by: string | null
   full_name: string | null
   created_at: string | null
 }
 
-export const PROFILE_SELECT = "id, email, role, approved_at, approved_by, full_name, created_at"
+export const PROFILE_SELECT =
+  "id, email, role, approved, approved_at, approved_by, full_name, created_at"
 
 export function isUserRole(value: string | null | undefined): value is UserRole {
   return !!value && USER_ROLES.includes(value as UserRole)
 }
 
-export function hasAppAccess(role: string | null | undefined): role is ApprovedRole {
+export function hasApprovedRole(role: string | null | undefined): role is ApprovedRole {
   return !!role && (APPROVED_ROLES as readonly string[]).includes(role)
+}
+
+export function hasAppAccess(
+  profile: Pick<Profile, "role" | "approved"> | null | undefined,
+): boolean {
+  if (!profile?.approved) return false
+  return hasApprovedRole(profile.role)
 }
 
 export function isAdmin(role: string | null | undefined): boolean {
