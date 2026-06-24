@@ -218,7 +218,145 @@ button:focus-visible {
 }
 .browse-subcategory-items {
   padding: 0 10px 10px;
-  gap: 10px;
+}
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.category-grid-item-full {
+  grid-column: 1 / -1;
+}
+.category-grid-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: var(--card-shadow);
+  transition: box-shadow 180ms ease, border-color 180ms ease, transform 180ms ease;
+  min-width: 0;
+}
+.category-grid-card:hover {
+  box-shadow: var(--card-shadow-hover);
+  border-color: #d0d5dd;
+  transform: translateY(-1px);
+}
+.category-grid-card-photo-wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  padding: 0;
+  border: none;
+  background: color-mix(in srgb, var(--bg) 55%, var(--card));
+  cursor: pointer;
+}
+.category-grid-card-photo-wrap:disabled {
+  cursor: default;
+}
+.category-grid-card-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.category-grid-card-photo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--muted);
+  font-size: 13px;
+}
+.category-grid-card-photo-count {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.category-grid-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  min-width: 0;
+}
+.category-grid-card-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.category-grid-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.category-grid-card-badges .badge {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+.category-grid-card-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+}
+.category-grid-card-meta div {
+  min-width: 0;
+}
+.category-grid-card-meta dt {
+  margin: 0 0 2px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.category-grid-card-meta dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.category-grid-card-status {
+  text-transform: capitalize;
+}
+.category-grid-card-status-sold {
+  color: #b42318;
+}
+.category-grid-card-status-active {
+  color: #027a48;
+}
+.category-grid-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+.category-grid-card-actions .btn-small {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+.category-grid-card-file-input {
+  display: none;
 }
 .category-picker-card {
   background: var(--card);
@@ -543,11 +681,12 @@ button:focus-visible {
   .meta-grid { grid-template-columns: 1fr; }
   .item-kpis { grid-template-columns: 1fr; }
   .item-price { text-align: left; }
-  .category-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .category-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .category-chip { min-height: 76px; }
   .form-grid-modal { grid-template-columns: 1fr; }
   .inline-category-fields { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .stats { grid-template-columns: 1fr; }
+  .category-grid { grid-template-columns: 1fr; }
 }

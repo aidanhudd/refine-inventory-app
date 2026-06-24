@@ -4,6 +4,7 @@ import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
 import { useAuth } from "./components/AuthProvider"
 import InventoryItemCard from "./components/InventoryItemCard"
+import InventoryCategoryGridCard from "./components/InventoryCategoryGridCard"
 
 type Category = {
   id: string
@@ -964,6 +965,72 @@ const [useJob, setUseJob] = useState("")
     )
   }
 
+  const renderCategoryGridItem = (item: InventoryItem) => {
+    const isInlineEditing = inlineEditingId === item.id && !!inlineDraft
+    const categoryName = item.category_id ? categoryNameById.get(item.category_id) || "" : ""
+    const subcategoryName = item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) || "" : ""
+    const photos = photoMap[item.id] || []
+
+    if (isInlineEditing) {
+      return (
+        <div key={item.id} className="category-grid-item-full">
+          <InventoryItemCard
+            item={item}
+            categoryName={categoryName}
+            subcategoryName={subcategoryName}
+            isInlineEditing
+            inlineDraft={inlineDraft}
+            inlineSaving={inlineSaving}
+            categories={categories}
+            subcategories={subcategories}
+            quantityTypes={quantityTypes}
+            photos={photos}
+            itemUsage={usageList.filter((usage) => usage.item_id === item.id).slice(0, 5)}
+            showSoldUndo={!!soldUndoMap[item.id]}
+            isUploadingPhotos={uploadingItemId === item.id}
+            formatCurrency={formatCurrency}
+            onUpdateDraft={updateInlineDraft}
+            onSave={() => void saveInlineEdit(item)}
+            onCancel={cancelInlineEdit}
+            onStartEdit={() => startInlineEdit(item)}
+            onMarkSold={() => void markSold(item.id)}
+            onUndoMarkSold={() => void undoMarkSold(item.id)}
+            onDelete={() => void deleteItem(item.id)}
+            onUse={() => {
+              setSelectedItem(item)
+              setUseModalOpen(true)
+            }}
+            onUndoUsage={(usageId, qty) => void undoUsage(usageId, item.id, qty)}
+            onUploadPhotos={(e) => void uploadMorePhotos(item.id, e)}
+            onPhotoClick={setActiveImage}
+            onPhotoDelete={(url) => void deleteItemPhoto(item.id, url)}
+          />
+        </div>
+      )
+    }
+
+    return (
+      <InventoryCategoryGridCard
+        key={item.id}
+        item={item}
+        categoryName={categoryName}
+        subcategoryName={subcategoryName}
+        photos={photos}
+        formatCurrency={formatCurrency}
+        isUploadingPhotos={uploadingItemId === item.id}
+        onStartEdit={() => startInlineEdit(item)}
+        onMarkSold={() => void markSold(item.id)}
+        onDelete={() => void deleteItem(item.id)}
+        onUse={() => {
+          setSelectedItem(item)
+          setUseModalOpen(true)
+        }}
+        onUploadPhotos={(e) => void uploadMorePhotos(item.id, e)}
+        onPhotoClick={setActiveImage}
+      />
+    )
+  }
+
   return (
   <main>
       <div className="stats">
@@ -1335,8 +1402,8 @@ const [useJob, setUseJob] = useState("")
                                     </span>
                                   </button>
                                   {!subCollapsed && (
-                                    <div className="list browse-subcategory-items">
-                                      {subGroup.items.map(renderInventoryItem)}
+                                    <div className="category-grid browse-subcategory-items">
+                                      {subGroup.items.map(renderCategoryGridItem)}
                                     </div>
                                   )}
                                 </div>
