@@ -315,6 +315,18 @@ button:focus-visible {
 .item-price strong { font-size: 20px; letter-spacing: -0.01em; }
 .inline-input { margin-top: 0; font-size: 14px; }
 .inline-textarea { min-height: 72px; margin-top: 4px; }
+.inline-category-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 4px;
+}
+.badges:has(.inline-category-fields) {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
 .item-kpis {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -438,6 +450,7 @@ button:focus-visible {
   .category-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
   .category-chip { min-height: 76px; }
   .form-grid-modal { grid-template-columns: 1fr; }
+  .inline-category-fields { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
   .stats { grid-template-columns: 1fr; }

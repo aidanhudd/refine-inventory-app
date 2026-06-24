@@ -48,6 +48,8 @@ type UsageRow = {
 type PhotoMap = Record<string, string[]>
 type InlineEditForm = {
   product_name: string
+  category_id: string
+  subcategory_id: string
   quantity_on_hand: string
   unit_cost: string
   warehouse_location: string
@@ -98,6 +100,21 @@ const getActionableSupabaseError = (message: string) => {
 
 const formatCurrency = (value: number) =>
   value.toLocaleString(undefined, { style: "currency", currency: "USD" })
+
+const validateCategorySubcategory = (
+  categoryId: string,
+  subcategoryId: string,
+  subcategories: Subcategory[],
+) => {
+  if (!subcategoryId) return null
+  if (!categoryId) return "Select a category before choosing a subcategory."
+  const subcategory = subcategories.find((sub) => sub.id === subcategoryId)
+  if (!subcategory) return "Selected subcategory is invalid."
+  if (subcategory.category_id !== categoryId) {
+    return "Selected subcategory does not belong to the chosen category."
+  }
+  return null
+}
 
 export default function Home() {
   const { user } = useAuth()
@@ -462,6 +479,17 @@ const [useJob, setUseJob] = useState("")
       return
     }
 
+    const categoryValidationError = validateCategorySubcategory(
+      form.category_id,
+      form.subcategory_id,
+      subcategories,
+    )
+    if (categoryValidationError) {
+      setErrorMessage(categoryValidationError)
+      setSaving(false)
+      return
+    }
+
     const payload = {
       sku: form.sku || null,
       product_name: form.product_name,
@@ -548,6 +576,7 @@ const [useJob, setUseJob] = useState("")
   }
 
   const startEdit = (item: InventoryItem) => {
+    cancelInlineEdit()
     setEditingId(item.id)
     setMessage("")
     setErrorMessage("")
@@ -568,9 +597,12 @@ const [useJob, setUseJob] = useState("")
   }
 
   const startInlineEdit = (item: InventoryItem) => {
+    if (itemFormOpen) closeItemForm()
     setInlineEditingId(item.id)
     setInlineDraft({
       product_name: item.product_name || "",
+      category_id: item.category_id || "",
+      subcategory_id: item.subcategory_id || "",
       quantity_on_hand: String(item.quantity_on_hand ?? 0),
       unit_cost: String(item.unit_cost ?? 0),
       warehouse_location: item.warehouse_location || "",
@@ -587,7 +619,17 @@ const [useJob, setUseJob] = useState("")
   }
 
   const updateInlineDraft = (key: keyof InlineEditForm, value: string) => {
-    setInlineDraft((prev) => (prev ? { ...prev, [key]: value } : prev))
+    setInlineDraft((prev) => {
+      if (!prev) return prev
+      const next = { ...prev, [key]: value }
+      if (key === "category_id") {
+        const subcategoryStillValid = subcategories.some(
+          (sub) => sub.id === prev.subcategory_id && sub.category_id === value,
+        )
+        if (!subcategoryStillValid) next.subcategory_id = ""
+      }
+      return next
+    })
   }
 
   const saveInlineEdit = async (item: InventoryItem) => {
@@ -598,12 +640,24 @@ const [useJob, setUseJob] = useState("")
       return
     }
 
+    const categoryValidationError = validateCategorySubcategory(
+      inlineDraft.category_id,
+      inlineDraft.subcategory_id,
+      subcategories,
+    )
+    if (categoryValidationError) {
+      setErrorMessage(categoryValidationError)
+      return
+    }
+
     setInlineSaving(true)
     setErrorMessage("")
     setMessage("")
 
     const payload = {
       product_name: inlineDraft.product_name,
+      category_id: inlineDraft.category_id || null,
+      subcategory_id: inlineDraft.subcategory_id || null,
       quantity_on_hand: Number(inlineDraft.quantity_on_hand || 0),
       unit_cost: Number(inlineDraft.unit_cost || 0),
       warehouse_location: inlineDraft.warehouse_location || null,
@@ -1049,6 +1103,10 @@ const [useJob, setUseJob] = useState("")
                 const displayTotalValue = displayQty * displayUnitCost
                 const photos = photoMap[item.id] || []
                 const itemUsage = usageList.filter((u) => u.item_id === item.id).slice(0, 5)
+                const inlineEditSubcategories =
+                  isInlineEditing && inlineDraft
+                    ? subcategories.filter((sub) => sub.category_id === inlineDraft.category_id)
+                    : []
 
                 return (
                   <div key={item.id} className="item-card">
@@ -1065,8 +1123,42 @@ const [useJob, setUseJob] = useState("")
                           <div className="item-name">{displayName || "Untitled Item"}</div>
                         )}
                         <div className="badges">
-                          {categoryName && <span className="badge">{categoryName}</span>}
-                          {subcategoryName && <span className="badge">{subcategoryName}</span>}
+                          {isInlineEditing ? (
+                            <div className="inline-category-fields">
+                              <select
+                                className="inline-input"
+                                value={inlineDraft.category_id}
+                                onChange={(e) => updateInlineDraft("category_id", e.target.value)}
+                                aria-label="Category"
+                              >
+                                <option value="">Select category</option>
+                                {categories.map((cat) => (
+                                  <option key={cat.id} value={cat.id}>
+                                    {cat.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <select
+                                className="inline-input"
+                                value={inlineDraft.subcategory_id}
+                                onChange={(e) => updateInlineDraft("subcategory_id", e.target.value)}
+                                disabled={!inlineDraft.category_id}
+                                aria-label="Subcategory"
+                              >
+                                <option value="">No subcategory</option>
+                                {inlineEditSubcategories.map((sub) => (
+                                  <option key={sub.id} value={sub.id}>
+                                    {sub.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          ) : (
+                            <>
+                              {categoryName && <span className="badge">{categoryName}</span>}
+                              {subcategoryName && <span className="badge">{subcategoryName}</span>}
+                            </>
+                          )}
                           <span className="badge">{item.sku || "No SKU"}</span>
                         </div>
                       </div>
@@ -1273,6 +1365,9 @@ const [useJob, setUseJob] = useState("")
                         <>
                           <button className="btn-edit btn-small" onClick={() => startInlineEdit(item)}>
                             Edit
+                          </button>
+                          <button className="btn-secondary btn-small" onClick={() => startEdit(item)}>
+                            Edit All
                           </button>
                         </>
                       )}
