@@ -326,6 +326,10 @@ button:focus-visible {
   width: 100%;
   margin-bottom: 4px;
 }
+.inline-quantity-fields {
+  display: grid;
+  gap: 8px;
+}
 .badges:has(.inline-category-fields) {
   display: grid;
   gap: 8px;

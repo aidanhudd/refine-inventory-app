@@ -51,6 +51,7 @@ type InlineEditForm = {
   category_id: string
   subcategory_id: string
   quantity_on_hand: string
+  quantity_type: string
   unit_cost: string
   warehouse_location: string
   notes: string
@@ -71,6 +72,7 @@ const defaultInlineDraft = (
   category_id: categoryFilter && categoryFilter !== "all" ? categoryFilter : categories[0]?.id || "",
   subcategory_id: subcategoryFilter && subcategoryFilter !== "none" ? subcategoryFilter : "",
   quantity_on_hand: "1",
+  quantity_type: quantityTypes[0]?.name || "",
   unit_cost: "",
   warehouse_location: "",
   notes: "",
@@ -421,6 +423,7 @@ const [useJob, setUseJob] = useState("")
       category_id: item.category_id || "",
       subcategory_id: item.subcategory_id || "",
       quantity_on_hand: String(item.quantity_on_hand ?? 0),
+      quantity_type: item.quantity_type || quantityTypes[0]?.name || "",
       unit_cost: String(item.unit_cost ?? 0),
       warehouse_location: item.warehouse_location || "",
       notes: item.notes || "",
@@ -478,7 +481,7 @@ const [useJob, setUseJob] = useState("")
       category_id: inlineDraft.category_id || null,
       subcategory_id: inlineDraft.subcategory_id || null,
       quantity_on_hand: Number(inlineDraft.quantity_on_hand || 0),
-      quantity_type: quantityTypes[0]?.name || null,
+      quantity_type: inlineDraft.quantity_type || null,
       unit_cost: Number(inlineDraft.unit_cost || 0),
       warehouse_location: inlineDraft.warehouse_location || null,
       notes: inlineDraft.notes || null,
@@ -539,6 +542,7 @@ const [useJob, setUseJob] = useState("")
       category_id: inlineDraft.category_id || null,
       subcategory_id: inlineDraft.subcategory_id || null,
       quantity_on_hand: Number(inlineDraft.quantity_on_hand || 0),
+      quantity_type: inlineDraft.quantity_type || null,
       unit_cost: Number(inlineDraft.unit_cost || 0),
       warehouse_location: inlineDraft.warehouse_location || null,
       notes: inlineDraft.notes || null,
@@ -1011,12 +1015,27 @@ const [useJob, setUseJob] = useState("")
                   <div className="item-kpis">
                     <div className="item-kpi">
                       <div className="item-kpi-label">Quantity on Hand</div>
-                      <input
-                        className="inline-input"
-                        type="number"
-                        value={inlineDraft.quantity_on_hand}
-                        onChange={(e) => updateInlineDraft("quantity_on_hand", e.target.value)}
-                      />
+                      <div className="inline-quantity-fields">
+                        <input
+                          className="inline-input"
+                          type="number"
+                          value={inlineDraft.quantity_on_hand}
+                          onChange={(e) => updateInlineDraft("quantity_on_hand", e.target.value)}
+                        />
+                        <select
+                          className="inline-input"
+                          value={inlineDraft.quantity_type}
+                          onChange={(e) => updateInlineDraft("quantity_type", e.target.value)}
+                          aria-label="Quantity type"
+                        >
+                          <option value="">Select quantity type</option>
+                          {quantityTypes.map((qty) => (
+                            <option key={qty.id} value={qty.name}>
+                              {qty.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                     <div className="item-kpi item-kpi-status">
                       <div className="item-kpi-label">Location</div>
@@ -1179,12 +1198,27 @@ const [useJob, setUseJob] = useState("")
                       <div className="item-kpi">
                         <div className="item-kpi-label">Quantity on Hand</div>
                         {isInlineEditing ? (
-                          <input
-                            className="inline-input"
-                            type="number"
-                            value={inlineDraft.quantity_on_hand}
-                            onChange={(e) => updateInlineDraft("quantity_on_hand", e.target.value)}
-                          />
+                          <div className="inline-quantity-fields">
+                            <input
+                              className="inline-input"
+                              type="number"
+                              value={inlineDraft.quantity_on_hand}
+                              onChange={(e) => updateInlineDraft("quantity_on_hand", e.target.value)}
+                            />
+                            <select
+                              className="inline-input"
+                              value={inlineDraft.quantity_type}
+                              onChange={(e) => updateInlineDraft("quantity_type", e.target.value)}
+                              aria-label="Quantity type"
+                            >
+                              <option value="">Select quantity type</option>
+                              {quantityTypes.map((qty) => (
+                                <option key={qty.id} value={qty.name}>
+                                  {qty.name}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         ) : (
                           <div className="item-kpi-value">
                             {displayQty} <span className="item-kpi-unit">{item.quantity_type || ""}</span>
