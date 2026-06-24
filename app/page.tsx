@@ -3,6 +3,7 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react"
 import { supabase } from "../lib/supabaseClient"
 import { useAuth } from "./components/AuthProvider"
+import InventoryItemCard from "./components/InventoryItemCard"
 
 type Category = {
   id: string
@@ -80,6 +81,25 @@ const defaultInlineDraft = (
 
 const SETTING_MATS_CATEGORY_NAME = "Setting Mats"
 const NEW_ITEM_DRAFT_ID = "__new-item__"
+const INVENTORY_VIEW_STORAGE_KEY = "inventory-view-mode"
+
+type InventoryViewMode = "list" | "category"
+
+type InventorySubcategoryGroup = {
+  key: string
+  name: string
+  items: InventoryItem[]
+}
+
+type InventoryCategoryGroup = {
+  key: string
+  name: string
+  subcategories: InventorySubcategoryGroup[]
+  itemCount: number
+}
+
+const UNCategorized_CATEGORY_KEY = "__uncategorized__"
+const NO_SUBCATEGORY_KEY = "__none__"
 
 const getActionableSupabaseError = (message: string) => {
   const lower = message.toLowerCase()
@@ -150,8 +170,18 @@ const [useJob, setUseJob] = useState("")
   const [inlineSaving, setInlineSaving] = useState(false)
   const [soldUndoMap, setSoldUndoMap] = useState<Record<string, SoldUndoSnapshot>>({})
   const [settingMatsBootstrapping, setSettingMatsBootstrapping] = useState(false)
+  const [inventoryViewMode, setInventoryViewMode] = useState<InventoryViewMode>("list")
+  const [collapsedBrowseGroups, setCollapsedBrowseGroups] = useState<Set<string>>(() => new Set())
+
   useEffect(() => {
     loadAll()
+  }, [])
+
+  useEffect(() => {
+    const stored = localStorage.getItem(INVENTORY_VIEW_STORAGE_KEY)
+    if (stored === "list" || stored === "category") {
+      setInventoryViewMode(stored)
+    }
   }, [])
 
   const loadAll = async () => {
@@ -256,6 +286,7 @@ const [useJob, setUseJob] = useState("")
   }, [subcategories, categoryFilter])
 
   const isAddingNew = inlineEditingId === NEW_ITEM_DRAFT_ID && !!inlineDraft
+  const isCategoryView = inventoryViewMode === "category"
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -295,10 +326,72 @@ const [useJob, setUseJob] = useState("")
     subcategoryNameById,
   ])
 
+  const groupedInventory = useMemo((): InventoryCategoryGroup[] => {
+    const itemsByCategory = new Map<string, InventoryItem[]>()
+
+    filteredItems.forEach((item) => {
+      const categoryKey = item.category_id || UNCategorized_CATEGORY_KEY
+      const categoryItems = itemsByCategory.get(categoryKey) || []
+      categoryItems.push(item)
+      itemsByCategory.set(categoryKey, categoryItems)
+    })
+
+    const groups: InventoryCategoryGroup[] = []
+
+    itemsByCategory.forEach((categoryItems, categoryKey) => {
+      const itemsBySubcategory = new Map<string, InventoryItem[]>()
+
+      categoryItems.forEach((item) => {
+        const subcategoryKey = item.subcategory_id || NO_SUBCATEGORY_KEY
+        const subcategoryItems = itemsBySubcategory.get(subcategoryKey) || []
+        subcategoryItems.push(item)
+        itemsBySubcategory.set(subcategoryKey, subcategoryItems)
+      })
+
+      const subcategories: InventorySubcategoryGroup[] = []
+
+      itemsBySubcategory.forEach((subcategoryItems, subcategoryKey) => {
+        subcategories.push({
+          key: subcategoryKey,
+          name:
+            subcategoryKey === NO_SUBCATEGORY_KEY
+              ? "No subcategory"
+              : subcategoryNameById.get(subcategoryKey) || "Unknown subcategory",
+          items: subcategoryItems,
+        })
+      })
+
+      subcategories.sort((a, b) => {
+        if (a.key === NO_SUBCATEGORY_KEY) return 1
+        if (b.key === NO_SUBCATEGORY_KEY) return -1
+        return a.name.localeCompare(b.name)
+      })
+
+      groups.push({
+        key: categoryKey,
+        name:
+          categoryKey === UNCategorized_CATEGORY_KEY
+            ? "Uncategorized"
+            : categoryNameById.get(categoryKey) || "Unknown category",
+        subcategories,
+        itemCount: categoryItems.length,
+      })
+    })
+
+    groups.sort((a, b) => {
+      if (a.key === UNCategorized_CATEGORY_KEY) return 1
+      if (b.key === UNCategorized_CATEGORY_KEY) return -1
+      return a.name.localeCompare(b.name)
+    })
+
+    return groups
+  }, [filteredItems, categoryNameById, subcategoryNameById])
+
   const hasSelectedInventoryView = useMemo(() => {
+    if (isCategoryView) return true
     if (categoryFilter === "all") return true
     return categories.some((category) => category.id === categoryFilter)
-  }, [categoryFilter, categories])
+  }, [isCategoryView, categoryFilter, categories])
 
   const selectedCategoryName = useMemo(() => {
     if (categoryFilter === "all") return "All Inventory"
@@ -795,6 +888,82 @@ const [useJob, setUseJob] = useState("")
     setUploadingItemId(null)
   }
 
+  const setViewMode = (mode: InventoryViewMode) => {
+    setInventoryViewMode(mode)
+    localStorage.setItem(INVENTORY_VIEW_STORAGE_KEY, mode)
+    if (mode === "category") {
+      if (categoryFilter !== "all") selectCategory("all")
+      setCategoryPickerCollapsed(true)
+    }
+  }
+
+  const toggleBrowseGroup = (groupKey: string) => {
+    setCollapsedBrowseGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupKey)) next.delete(groupKey)
+      else next.add(groupKey)
+      return next
+    })
+  }
+
+  const deleteItemPhoto = async (itemId: string, url: string) => {
+    const filePath = url.split("/storage/v1/object/public/inventory-photos/")[1]?.replace(/"/g, "")
+    if (!filePath) {
+      alert("Invalid photo path.")
+      return
+    }
+
+    const { error } = await supabase.storage.from("inventory-photos").remove([filePath])
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    setPhotoMap((prev) => ({
+      ...prev,
+      [itemId]: (prev[itemId] || []).filter((photoUrl) => photoUrl !== url),
+    }))
+  }
+
+  const renderInventoryItem = (item: InventoryItem) => {
+    const isInlineEditing = inlineEditingId === item.id && !!inlineDraft
+
+    return (
+      <InventoryItemCard
+        key={item.id}
+        item={item}
+        categoryName={item.category_id ? categoryNameById.get(item.category_id) || "" : ""}
+        subcategoryName={item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) || "" : ""}
+        isInlineEditing={isInlineEditing}
+        inlineDraft={isInlineEditing ? inlineDraft : null}
+        inlineSaving={inlineSaving}
+        categories={categories}
+        subcategories={subcategories}
+        quantityTypes={quantityTypes}
+        photos={photoMap[item.id] || []}
+        itemUsage={usageList.filter((usage) => usage.item_id === item.id).slice(0, 5)}
+        showSoldUndo={!!soldUndoMap[item.id]}
+        isUploadingPhotos={uploadingItemId === item.id}
+        formatCurrency={formatCurrency}
+        onUpdateDraft={updateInlineDraft}
+        onSave={() => void saveInlineEdit(item)}
+        onCancel={cancelInlineEdit}
+        onStartEdit={() => startInlineEdit(item)}
+        onMarkSold={() => void markSold(item.id)}
+        onUndoMarkSold={() => void undoMarkSold(item.id)}
+        onDelete={() => void deleteItem(item.id)}
+        onUse={() => {
+          setSelectedItem(item)
+          setUseModalOpen(true)
+        }}
+        onUndoUsage={(usageId, qty) => void undoUsage(usageId, item.id, qty)}
+        onUploadPhotos={(e) => void uploadMorePhotos(item.id, e)}
+        onPhotoClick={setActiveImage}
+        onPhotoDelete={(url) => void deleteItemPhoto(item.id, url)}
+      />
+    )
+  }
+
   return (
   <main>
       <div className="stats">
@@ -823,11 +992,31 @@ const [useJob, setUseJob] = useState("")
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
+            <div className="toolbar-view-toggle" role="group" aria-label="Inventory view mode">
+              <button
+                type="button"
+                className={`toolbar-view-btn ${!isCategoryView ? "toolbar-view-btn-active" : ""}`}
+                onClick={() => setViewMode("list")}
+                aria-pressed={!isCategoryView}
+              >
+                List
+              </button>
+              <button
+                type="button"
+                className={`toolbar-view-btn ${isCategoryView ? "toolbar-view-btn-active" : ""}`}
+                onClick={() => setViewMode("category")}
+                aria-pressed={isCategoryView}
+              >
+                Category
+              </button>
+            </div>
             <button type="button" className="btn-primary toolbar-add-btn" onClick={openAddForm}>
               Add Inventory
             </button>
           </div>
 
+          {!isCategoryView && (
+          <>
           <div className={`category-picker-card ${categoryPickerCollapsed ? "category-picker-collapsed" : ""}`}>
             <div className="category-picker-top">
               <div className="category-picker-header">
@@ -945,6 +1134,8 @@ const [useJob, setUseJob] = useState("")
               </div>
             </div>
           )}
+          </>
+          )}
 
           {loading ? (
             <div className="empty">Loading inventory...</div>
@@ -955,7 +1146,7 @@ const [useJob, setUseJob] = useState("")
               No items found in {selectedViewLabel || "this view"}. Try another category or refine your filters.
             </div>
           ) : (
-            <div className="list">
+            <>
               {isAddingNew && inlineDraft && (
                 <div key={NEW_ITEM_DRAFT_ID} className="item-card item-card-new">
                   <div className="item-top">
@@ -1105,348 +1296,64 @@ const [useJob, setUseJob] = useState("")
                 </div>
               )}
 
-              {filteredItems.map((item) => {
-                const categoryName = item.category_id ? categoryNameById.get(item.category_id) : ""
-                const subcategoryName = item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) : ""
-                const qty = Number(item.quantity_on_hand || 0)
-                const itemTotalValue = qty * Number(item.unit_cost || 0)
-                const statusLabel = (item.status || "active").replace(/_/g, " ")
-                const isInlineEditing = inlineEditingId === item.id && inlineDraft
-                const displayName = isInlineEditing ? inlineDraft.product_name : item.product_name
-                const displayQty = Number(isInlineEditing ? inlineDraft.quantity_on_hand : item.quantity_on_hand || 0)
-                const displayUnitCost = Number(isInlineEditing ? inlineDraft.unit_cost : item.unit_cost || 0)
-                const displayLocation = isInlineEditing ? inlineDraft.warehouse_location : item.warehouse_location || "—"
-                const displayNotes = isInlineEditing ? inlineDraft.notes : item.notes || "No notes"
-                const displayTotalValue = displayQty * displayUnitCost
-                const photos = photoMap[item.id] || []
-                const itemUsage = usageList.filter((u) => u.item_id === item.id).slice(0, 5)
-                const inlineEditSubcategories =
-                  isInlineEditing && inlineDraft
-                    ? subcategories.filter((sub) => sub.category_id === inlineDraft.category_id)
-                    : []
+              {isCategoryView ? (
+                <div className="category-view">
+                  {groupedInventory.map((categoryGroup) => {
+                    const categoryGroupKey = `cat:${categoryGroup.key}`
+                    const categoryCollapsed = collapsedBrowseGroups.has(categoryGroupKey)
 
-                return (
-                  <div key={item.id} className="item-card">
-                    <div className="item-top">
-                      <div>
-                        {isInlineEditing ? (
-                          <input
-                            className="inline-input"
-                            value={inlineDraft.product_name}
-                            onChange={(e) => updateInlineDraft("product_name", e.target.value)}
-                            placeholder="Product name"
-                          />
-                        ) : (
-                          <div className="item-name">{displayName || "Untitled Item"}</div>
-                        )}
-                        <div className="badges">
-                          {isInlineEditing ? (
-                            <div className="inline-category-fields">
-                              <select
-                                className="inline-input"
-                                value={inlineDraft.category_id}
-                                onChange={(e) => updateInlineDraft("category_id", e.target.value)}
-                                aria-label="Category"
-                              >
-                                <option value="">Select category</option>
-                                {categories.map((cat) => (
-                                  <option key={cat.id} value={cat.id}>
-                                    {cat.name}
-                                  </option>
-                                ))}
-                              </select>
-                              <select
-                                className="inline-input"
-                                value={inlineDraft.subcategory_id}
-                                onChange={(e) => updateInlineDraft("subcategory_id", e.target.value)}
-                                disabled={!inlineDraft.category_id}
-                                aria-label="Subcategory"
-                              >
-                                <option value="">No subcategory</option>
-                                {inlineEditSubcategories.map((sub) => (
-                                  <option key={sub.id} value={sub.id}>
-                                    {sub.name}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          ) : (
-                            <>
-                              {categoryName && <span className="badge">{categoryName}</span>}
-                              {subcategoryName && <span className="badge">{subcategoryName}</span>}
-                            </>
-                          )}
-                          <span className="badge">{item.sku || "No SKU"}</span>
-                        </div>
-                      </div>
-                      <div className="item-price">
-                        <div className="small" style={{ marginTop: 0 }}>Unit Cost</div>
-                        {isInlineEditing ? (
-                          <input
-                            className="inline-input"
-                            type="number"
-                            value={inlineDraft.unit_cost}
-                            onChange={(e) => updateInlineDraft("unit_cost", e.target.value)}
-                          />
-                        ) : (
-                          <strong>{formatCurrency(Number(item.unit_cost || 0))}</strong>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="item-kpis">
-                      <div className="item-kpi">
-                        <div className="item-kpi-label">Quantity on Hand</div>
-                        {isInlineEditing ? (
-                          <div className="inline-quantity-fields">
-                            <input
-                              className="inline-input"
-                              type="number"
-                              value={inlineDraft.quantity_on_hand}
-                              onChange={(e) => updateInlineDraft("quantity_on_hand", e.target.value)}
-                            />
-                            <select
-                              className="inline-input"
-                              value={inlineDraft.quantity_type}
-                              onChange={(e) => updateInlineDraft("quantity_type", e.target.value)}
-                              aria-label="Quantity type"
-                            >
-                              <option value="">Select quantity type</option>
-                              {quantityTypes.map((qty) => (
-                                <option key={qty.id} value={qty.name}>
-                                  {qty.name}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        ) : (
-                          <div className="item-kpi-value">
-                            {displayQty} <span className="item-kpi-unit">{item.quantity_type || ""}</span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="item-kpi item-kpi-status">
-                        <div className="item-kpi-label">Location</div>
-                        {isInlineEditing ? (
-                          <input
-                            className="inline-input"
-                            value={inlineDraft.warehouse_location}
-                            onChange={(e) => updateInlineDraft("warehouse_location", e.target.value)}
-                            placeholder="Warehouse location"
-                          />
-                        ) : (
-                          <div className="item-kpi-value item-status-text">{displayLocation}</div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="meta-grid">
-                      <div>
-                        <strong>Total Value:</strong> {formatCurrency(displayTotalValue)}
-                      </div>
-                      <div>
-                        <strong>Status:</strong> {statusLabel}
-                      </div>
-                    </div>
-
-                    <div className="meta-grid meta-grid-secondary section-gap">
-                      <div>
-                        <strong>Created:</strong>{" "}
-                        {item.created_at ? new Date(item.created_at).toLocaleDateString() : "—"}
-                      </div>
-                      <div>
-                        <strong>Notes:</strong>{" "}
-                        {isInlineEditing ? (
-                          <textarea
-                            className="inline-textarea"
-                            value={inlineDraft.notes}
-                            onChange={(e) => updateInlineDraft("notes", e.target.value)}
-                            placeholder="Notes"
-                          />
-                        ) : (
-                          displayNotes
-                        )}
-                      </div>
-                    </div>
-
-                    {itemUsage.length > 0 && (
-                      <div className="section-gap">
-                        <strong>Usage History</strong>
-
-                        {itemUsage.map((u) => (
-                          <div
-                            key={u.id}
-                            style={{
-                              fontSize: "13px",
-                              marginTop: "4px",
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: "8px",
-                            }}
-                          >
-                            <span>
-                              • {u.job_name || "No Job"} — {u.quantity_used || 0} {item.quantity_type || ""} —{" "}
-                              {u.used_at ? new Date(u.used_at).toLocaleDateString() : ""}
-                            </span>
-
-                            <button
-                              onClick={() => {
-                                const confirmed = confirm("Undo this usage?")
-                                if (!confirmed) return
-                                undoUsage(u.id, item.id, Number(u.quantity_used || 0))
-                              }}
-                              style={{
-                                marginLeft: "8px",
-                                background: "red",
-                                color: "white",
-                                border: "none",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                fontSize: "11px",
-                                padding: "2px 6px",
-                              }}
-                            >
-                              Undo
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {photos.length > 0 && (
-                      <div className="section-gap">
-                        <label>Photos</label>
-                        <div className="photo-grid">
-                          {photos.slice(0, 6).map((url) => {
-                            const filePath = url
-                              .split("/storage/v1/object/public/inventory-photos/")[1]
-                              ?.replace(/"/g, "")
-
-                            return (
-                              <div
-                                key={url}
-                                className="photo-box"
-                                style={{ position: "relative" }}
-                              >
-                                <button
-                                  onClick={async (e) => {
-                                    e.stopPropagation()
-
-                                    const confirmed = confirm("Delete this photo?")
-                                    if (!confirmed) return
-
-                                    if (!filePath) {
-                                      alert("Invalid photo path.")
-                                      return
-                                    }
-
-                                    const { error } = await supabase.storage
-                                      .from("inventory-photos")
-                                      .remove([filePath])
-
-                                    if (error) {
-                                      alert(error.message)
-                                    } else {
-                                      setPhotoMap((prev) => ({
-                                        ...prev,
-                                        [item.id]: (prev[item.id] || []).filter((photoUrl) => photoUrl !== url),
-                                      }))
-                                    }
-                                  }}
-                                  style={{
-                                    position: "absolute",
-                                    top: 4,
-                                    right: 4,
-                                    background: "rgba(0,0,0,0.7)",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "50%",
-                                    width: 22,
-                                    height: 22,
-                                    cursor: "pointer",
-                                    fontSize: 12,
-                                  }}
-                                >
-                                  ×
-                                </button>
-
-                                <img
-                                  src={url}
-                                  alt="Inventory item"
-                                  onClick={() => setActiveImage(url)}
-                                  style={{ cursor: "pointer" }}
-                                />
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="action-row">
-                      {isInlineEditing ? (
-                        <>
-                          <button className="btn-primary btn-small" disabled={inlineSaving} onClick={() => saveInlineEdit(item)}>
-                            {inlineSaving ? "Saving..." : "Save"}
-                          </button>
-                          <button className="btn-secondary btn-small" disabled={inlineSaving} onClick={cancelInlineEdit}>
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button className="btn-edit btn-small" onClick={() => startInlineEdit(item)}>
-                            Edit
-                          </button>
-                        </>
-                      )}
-
-                      <button className="btn-secondary btn-small" onClick={() => markSold(item.id)}>
-                        Mark Sold
-                      </button>
-                      {isInlineEditing && soldUndoMap[item.id] && (
-                        <button className="btn-secondary btn-small" onClick={() => undoMarkSold(item.id)}>
-                          Undo Mark Sold
+                    return (
+                      <div key={categoryGroup.key} className="browse-category-group">
+                        <button
+                          type="button"
+                          className="browse-group-header"
+                          onClick={() => toggleBrowseGroup(categoryGroupKey)}
+                          aria-expanded={!categoryCollapsed}
+                        >
+                          <span className="browse-group-title">{categoryGroup.name}</span>
+                          <span className="browse-group-meta">
+                            {categoryGroup.itemCount} item{categoryGroup.itemCount === 1 ? "" : "s"}
+                          </span>
                         </button>
-                      )}
+                        {!categoryCollapsed && (
+                          <div className="browse-group-body">
+                            {categoryGroup.subcategories.map((subGroup) => {
+                              const subGroupKey = `sub:${categoryGroup.key}:${subGroup.key}`
+                              const subCollapsed = collapsedBrowseGroups.has(subGroupKey)
 
-                      <button className="btn-danger btn-small" onClick={() => deleteItem(item.id)}>
-                        Delete
-                      </button>
-
-                      <button
-  className="btn-secondary btn-small"
-  onClick={() => {
-    setSelectedItem(item)
-    setUseModalOpen(true)
-  }}
->
-  Use
-</button>
-                    </div>
-
-                    <div className="section-gap">
-                      <label>Add More Photos</label>
-
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/*"
-                        onChange={(e) => uploadMorePhotos(item.id, e)}
-                      />
-
-                      <div className="small">
-                        {uploadingItemId === item.id
-                          ? "Uploading..."
-                          : photos.length
-                          ? `${photos.length} photo(s)`
-                          : "No photos yet."}
+                              return (
+                                <div key={subGroup.key} className="browse-subcategory-group">
+                                  <button
+                                    type="button"
+                                    className="browse-subcategory-header"
+                                    onClick={() => toggleBrowseGroup(subGroupKey)}
+                                    aria-expanded={!subCollapsed}
+                                  >
+                                    <span className="browse-subcategory-title">{subGroup.name}</span>
+                                    <span className="browse-group-meta">
+                                      {subGroup.items.length} item{subGroup.items.length === 1 ? "" : "s"}
+                                    </span>
+                                  </button>
+                                  {!subCollapsed && (
+                                    <div className="list browse-subcategory-items">
+                                      {subGroup.items.map(renderInventoryItem)}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  </div>
-                )
-              })}
-                    </div>   
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="list">
+                  {filteredItems.map(renderInventoryItem)}
+                </div>
+              )}
+            </>
           )}
       </section>
 
