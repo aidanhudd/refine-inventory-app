@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabaseClient"
 import { useAuth } from "./components/AuthProvider"
 import InventoryItemCard from "./components/InventoryItemCard"
 import InventoryCategoryGridCard from "./components/InventoryCategoryGridCard"
+import CategoryExpandedItemPanel from "./components/CategoryExpandedItemPanel"
 
 type Category = {
   id: string
@@ -990,16 +991,25 @@ const [useJob, setUseJob] = useState("")
     const subcategoryName = item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) || "" : ""
     const photos = photoMap[item.id] || []
 
-    if (isInlineEditing || isExpanded) {
+    if (isExpanded) {
+      const cardProps = buildInventoryItemCardProps(item)
+
       return (
-        <div key={item.id} className="inventory-item-grid-full category-expanded-card">
-          {isExpanded && !isInlineEditing && (
-            <div className="category-expanded-card-toolbar">
-              <button type="button" className="btn-secondary btn-small" onClick={closeCategoryItemDetail}>
-                Close
-              </button>
-            </div>
-          )}
+        <div key={item.id} className="inventory-item-grid-full">
+          <CategoryExpandedItemPanel
+            {...cardProps}
+            photos={photos}
+            categoryName={categoryName}
+            subcategoryName={subcategoryName}
+            onClose={closeCategoryItemDetail}
+          />
+        </div>
+      )
+    }
+
+    if (isInlineEditing) {
+      return (
+        <div key={item.id} className="inventory-item-grid-full">
           <InventoryItemCard {...buildInventoryItemCardProps(item)} />
         </div>
       )

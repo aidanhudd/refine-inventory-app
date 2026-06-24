@@ -66,6 +66,7 @@ type InventoryItemCardProps = {
   onUploadPhotos: (e: ChangeEvent<HTMLInputElement>) => void
   onPhotoClick: (url: string) => void
   onPhotoDelete: (url: string) => void
+  suppressPhotoGallery?: boolean
 }
 
 export default function InventoryItemCard({
@@ -95,6 +96,7 @@ export default function InventoryItemCard({
   onUploadPhotos,
   onPhotoClick,
   onPhotoDelete,
+  suppressPhotoGallery = false,
 }: InventoryItemCardProps) {
   const statusLabel = (item.status || "active").replace(/_/g, " ")
   const displayName = isInlineEditing && inlineDraft ? inlineDraft.product_name : item.product_name
@@ -296,7 +298,7 @@ export default function InventoryItemCard({
         </div>
       )}
 
-      {photos.length > 0 && (
+      {photos.length > 0 && !suppressPhotoGallery && (
         <div className="section-gap">
           <label>Photos</label>
           <div className="photo-grid">
