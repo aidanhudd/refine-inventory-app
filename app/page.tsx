@@ -885,6 +885,7 @@ export default function Home() {
   const openHoldModal = (item: InventoryItem) => {
     setSelectedItem(item)
     setHoldLastName("")
+    setErrorMessage("")
     setHoldModalOpen(true)
   }
 
@@ -1675,6 +1676,8 @@ export default function Home() {
               onChange={(e) => setHoldLastName(e.target.value)}
               style={{ width: "100%", marginBottom: "10px" }}
             />
+
+            {errorMessage && <div className="notice">{errorMessage}</div>}
 
             <div className="modal-actions">
               <button type="button" onClick={() => setHoldModalOpen(false)}>
