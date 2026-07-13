@@ -4,6 +4,8 @@ import { ChangeEvent, KeyboardEvent, MouseEvent, useRef } from "react"
 import type { InventoryItemCardItem } from "./InventoryItemCard"
 import { categorySupportsDimensions, formatDimensionsSizeLine, formatDimensionsSquareFeetLine } from "../../lib/inventoryDimensions"
 import { useHidePrices } from "./HidePricesProvider"
+import ItemHoldStatus from "./ItemHoldStatus"
+import { isItemOnHold } from "../../lib/itemHold"
 
 type InventoryCategoryGridCardProps = {
   item: InventoryItemCardItem
@@ -17,6 +19,8 @@ type InventoryCategoryGridCardProps = {
   onMarkSold: () => void
   onDelete: () => void
   onUse: () => void
+  onHold: () => void
+  onReleaseHold: () => void
   onUploadPhotos: (e: ChangeEvent<HTMLInputElement>) => void
 }
 
@@ -36,6 +40,8 @@ export default function InventoryCategoryGridCard({
   onMarkSold,
   onDelete,
   onUse,
+  onHold,
+  onReleaseHold,
   onUploadPhotos,
 }: InventoryCategoryGridCardProps) {
   const { hidePrices } = useHidePrices()
@@ -44,6 +50,7 @@ export default function InventoryCategoryGridCard({
   const statusLabel = (item.status || "active").replace(/_/g, " ")
   const qty = Number(item.quantity_on_hand || 0)
   const unitCost = Number(item.unit_cost || 0)
+  const itemOnHold = isItemOnHold(item.hold_last_name)
 
   const handleCardKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key === "Enter" || e.key === " ") {
@@ -71,6 +78,8 @@ export default function InventoryCategoryGridCard({
       </div>
 
       <div className="category-grid-card-body">
+        <ItemHoldStatus holdLastName={item.hold_last_name} compact />
+
         <h4 className="category-grid-card-name">{item.product_name || "Untitled Item"}</h4>
 
         <div className="category-grid-card-badges">
@@ -128,6 +137,29 @@ export default function InventoryCategoryGridCard({
           >
             Use
           </button>
+          {itemOnHold ? (
+            <button
+              type="button"
+              className="btn-secondary btn-small"
+              onClick={(e) => {
+                stopClick(e)
+                onReleaseHold()
+              }}
+            >
+              Release
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn-secondary btn-small"
+              onClick={(e) => {
+                stopClick(e)
+                onHold()
+              }}
+            >
+              Hold
+            </button>
+          )}
           <button
             type="button"
             className="btn-secondary btn-small"

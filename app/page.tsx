@@ -45,6 +45,8 @@ type InventoryItem = {
   warehouse_location: string | null
   notes: string | null
   status: string | null
+  hold_last_name: string | null
+  hold_at: string | null
   created_at: string | null
   length_inches: number | null
   width_inches: number | null
@@ -124,6 +126,8 @@ const NO_SUBCATEGORY_KEY = "__none__"
 
 const normalizeInventoryItem = (item: InventoryItem): InventoryItem => ({
   ...item,
+  hold_last_name: item.hold_last_name ?? null,
+  hold_at: item.hold_at ?? null,
   length_inches: normalizeDimensionValue(item.length_inches),
   width_inches: normalizeDimensionValue(item.width_inches),
   square_feet: normalizeDimensionValue(item.square_feet),
@@ -146,6 +150,13 @@ const getActionableSupabaseError = (message: string) => {
     lower.includes("square_feet")
   ) {
     return "Database migration missing: run supabase/migrations/20260520_inventory_item_dimensions.sql in Supabase SQL Editor, then retry."
+  }
+
+  if (
+    lower.includes("hold_last_name") ||
+    lower.includes("hold_at")
+  ) {
+    return "Database migration missing: run supabase/migrations/20260713_inventory_item_holds.sql in Supabase SQL Editor, then retry."
   }
 
   if (lower.includes("row-level security")) {
@@ -199,9 +210,11 @@ export default function Home() {
   const [photoMap, setPhotoMap] = useState<PhotoMap>({})
   const [activeImage, setActiveImage] = useState<string | null>(null)
   const [useModalOpen, setUseModalOpen] = useState(false)
-const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
-const [useQty, setUseQty] = useState("")
-const [useJob, setUseJob] = useState("")
+  const [holdModalOpen, setHoldModalOpen] = useState(false)
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
+  const [useQty, setUseQty] = useState("")
+  const [useJob, setUseJob] = useState("")
+  const [holdLastName, setHoldLastName] = useState("")
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null)
   const [inlineDraft, setInlineDraft] = useState<InlineEditForm | null>(null)
   const [inlineSaving, setInlineSaving] = useState(false)
@@ -869,6 +882,74 @@ const [useJob, setUseJob] = useState("")
     setMessage("Usage recorded.")
   }
 
+  const openHoldModal = (item: InventoryItem) => {
+    setSelectedItem(item)
+    setHoldLastName("")
+    setHoldModalOpen(true)
+  }
+
+  const setItemHold = async (itemId: string, lastName: string): Promise<boolean> => {
+    setErrorMessage("")
+    setMessage("")
+
+    const trimmedLastName = lastName.trim()
+    if (!trimmedLastName) {
+      setErrorMessage("Enter a customer last name for the hold.")
+      return false
+    }
+
+    const holdAt = new Date().toISOString()
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({
+        hold_last_name: trimmedLastName,
+        hold_at: holdAt,
+      })
+      .eq("id", itemId)
+
+    if (error) {
+      setErrorMessage(getActionableSupabaseError(error.message))
+      return false
+    }
+
+    setItems((prev) =>
+      prev.map((inventoryItem) =>
+        inventoryItem.id === itemId
+          ? { ...inventoryItem, hold_last_name: trimmedLastName, hold_at: holdAt }
+          : inventoryItem,
+      ),
+    )
+    setMessage(`Item placed on hold for ${trimmedLastName}.`)
+    return true
+  }
+
+  const releaseItemHold = async (itemId: string) => {
+    setErrorMessage("")
+    setMessage("")
+
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({
+        hold_last_name: null,
+        hold_at: null,
+      })
+      .eq("id", itemId)
+
+    if (error) {
+      setErrorMessage(getActionableSupabaseError(error.message))
+      return
+    }
+
+    setItems((prev) =>
+      prev.map((inventoryItem) =>
+        inventoryItem.id === itemId
+          ? { ...inventoryItem, hold_last_name: null, hold_at: null }
+          : inventoryItem,
+      ),
+    )
+    setMessage("Hold released. Item is available to show.")
+  }
+
   const undoUsage = async (usageId: string, itemId: string, qty: number) => {
     setErrorMessage("")
     setMessage("")
@@ -1085,6 +1166,8 @@ const [useJob, setUseJob] = useState("")
         setSelectedItem(item)
         setUseModalOpen(true)
       },
+      onHold: () => openHoldModal(item),
+      onReleaseHold: () => void releaseItemHold(item.id),
       onUndoUsage: (usageId: string, qty: number) => void undoUsage(usageId, item.id, qty),
       onUploadPhotos: (e: ChangeEvent<HTMLInputElement>) => void uploadMorePhotos(item.id, e),
       onPhotoClick: setActiveImage,
@@ -1136,6 +1219,8 @@ const [useJob, setUseJob] = useState("")
           setSelectedItem(item)
           setUseModalOpen(true)
         }}
+        onHold={() => openHoldModal(item)}
+        onReleaseHold={() => void releaseItemHold(item.id)}
         onUploadPhotos={(e) => void uploadMorePhotos(item.id, e)}
       />
     )
@@ -1573,6 +1658,42 @@ const [useJob, setUseJob] = useState("")
               borderRadius: "12px",
             }}
           />
+        </div>
+      )}
+
+      {holdModalOpen && selectedItem && (
+        <div onClick={() => setHoldModalOpen(false)} className="modal-overlay">
+          <div onClick={(e) => e.stopPropagation()} className="modal-panel">
+            <h3>Hold — {selectedItem.product_name}</h3>
+            <p className="subtext" style={{ marginBottom: "12px" }}>
+              Mark this item as on hold so it is not shown to other customers.
+            </p>
+
+            <input
+              placeholder="Customer Last Name"
+              value={holdLastName}
+              onChange={(e) => setHoldLastName(e.target.value)}
+              style={{ width: "100%", marginBottom: "10px" }}
+            />
+
+            <div className="modal-actions">
+              <button type="button" onClick={() => setHoldModalOpen(false)}>
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  const success = await setItemHold(selectedItem.id, holdLastName)
+                  if (!success) return
+                  setHoldLastName("")
+                  setHoldModalOpen(false)
+                }}
+              >
+                Place Hold
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

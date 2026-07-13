@@ -2,7 +2,9 @@
 
 import { ChangeEvent } from "react"
 import ItemDimensionsFields from "./ItemDimensionsFields"
+import ItemHoldStatus from "./ItemHoldStatus"
 import { useHidePrices } from "./HidePricesProvider"
+import { isItemOnHold } from "../../lib/itemHold"
 
 export type InventoryItemCardCategory = { id: string; name: string }
 export type InventoryItemCardSubcategory = { id: string; category_id: string; name: string }
@@ -20,6 +22,8 @@ export type InventoryItemCardItem = {
   warehouse_location: string | null
   notes: string | null
   status: string | null
+  hold_last_name: string | null
+  hold_at: string | null
   created_at: string | null
   length_inches: number | null
   width_inches: number | null
@@ -70,6 +74,8 @@ type InventoryItemCardProps = {
   onUndoMarkSold: () => void
   onDelete: () => void
   onUse: () => void
+  onHold: () => void
+  onReleaseHold: () => void
   onUndoUsage: (usageId: string, qty: number) => void
   onUploadPhotos: (e: ChangeEvent<HTMLInputElement>) => void
   onPhotoClick: (url: string) => void
@@ -100,6 +106,8 @@ export default function InventoryItemCard({
   onUndoMarkSold,
   onDelete,
   onUse,
+  onHold,
+  onReleaseHold,
   onUndoUsage,
   onUploadPhotos,
   onPhotoClick,
@@ -119,9 +127,12 @@ export default function InventoryItemCard({
     isInlineEditing && inlineDraft
       ? subcategories.filter((sub) => sub.category_id === inlineDraft.category_id)
       : []
+  const itemOnHold = isItemOnHold(item.hold_last_name)
 
   return (
     <div className="item-card">
+      <ItemHoldStatus holdLastName={item.hold_last_name} />
+
       <div className="item-top">
         <div>
           {isInlineEditing && inlineDraft ? (
@@ -392,6 +403,16 @@ export default function InventoryItemCard({
         <button className="btn-secondary btn-small" onClick={onUse}>
           Use
         </button>
+
+        {itemOnHold ? (
+          <button className="btn-secondary btn-small" onClick={onReleaseHold} type="button">
+            Release Hold
+          </button>
+        ) : (
+          <button className="btn-secondary btn-small" onClick={onHold} type="button">
+            Hold
+          </button>
+        )}
       </div>
 
       <div className="section-gap">
