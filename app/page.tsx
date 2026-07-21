@@ -996,6 +996,18 @@ export default function Home() {
     const itemToMark = items.find((item) => item.id === id)
     if (!itemToMark) return
 
+    // Avoid overwriting the undo snapshot with status "sold" if Mark Sold is clicked again.
+    if ((itemToMark.status || "").toLowerCase() === "sold") {
+      setMessage("Item is already marked as sold.")
+      return
+    }
+
+    const previousStatus = itemToMark.status || "active"
+    const previousQty =
+      inlineEditingId === id && inlineDraft
+        ? Number(inlineDraft.quantity_on_hand || 0)
+        : Number(itemToMark.quantity_on_hand || 0)
+
     const { error } = await supabase
       .from("inventory_items")
       .update({ status: "sold", quantity_on_hand: 0 })
@@ -1006,17 +1018,24 @@ export default function Home() {
       return
     }
 
-    setSoldUndoMap((prev) => ({
-      ...prev,
-      [id]: {
-        status: itemToMark.status || "active",
-        quantity_on_hand: Number(itemToMark.quantity_on_hand || 0),
-      },
-    }))
+    setSoldUndoMap((prev) => {
+      // Keep the first pre-sold snapshot so a second click can't poison undo.
+      if (prev[id]) return prev
+      return {
+        ...prev,
+        [id]: {
+          status: previousStatus,
+          quantity_on_hand: previousQty,
+        },
+      }
+    })
 
     setItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, status: "sold", quantity_on_hand: 0 } : item))
     )
+    if (inlineEditingId === id) {
+      setInlineDraft((prev) => (prev ? { ...prev, quantity_on_hand: "0" } : prev))
+    }
     setMessage("Item marked as sold.")
   }
 
@@ -1030,11 +1049,16 @@ export default function Home() {
       return
     }
 
+    // Never restore "sold" — that means the snapshot was overwritten after a repeat Mark Sold.
+    const restoredStatus =
+      (snapshot.status || "").toLowerCase() === "sold" ? "active" : snapshot.status || "active"
+    const restoredQty = Number(snapshot.quantity_on_hand || 0)
+
     const { error } = await supabase
       .from("inventory_items")
       .update({
-        status: snapshot.status,
-        quantity_on_hand: snapshot.quantity_on_hand,
+        status: restoredStatus,
+        quantity_on_hand: restoredQty,
       })
       .eq("id", id)
 
@@ -1046,10 +1070,15 @@ export default function Home() {
     setItems((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, status: snapshot.status, quantity_on_hand: snapshot.quantity_on_hand }
+          ? { ...item, status: restoredStatus, quantity_on_hand: restoredQty }
           : item
       )
     )
+    if (inlineEditingId === id) {
+      setInlineDraft((prev) =>
+        prev ? { ...prev, quantity_on_hand: String(restoredQty) } : prev,
+      )
+    }
     setSoldUndoMap((prev) => {
       const next = { ...prev }
       delete next[id]
