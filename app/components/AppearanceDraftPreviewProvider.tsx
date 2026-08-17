@@ -1,18 +1,9 @@
 "use client"
 
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  type ReactNode,
-} from "react"
+import { createContext, useContext, useMemo, type ReactNode } from "react"
 import {
   APPEARANCE_SCOPE_ATTR,
-  applyAppearanceAttributes,
-  restoreAppearanceAttributes,
-  type AppearanceAttributeSnapshot,
+  appearanceConfigToDataAttributes,
   type AppearanceConfig,
 } from "../../lib/appearance"
 
@@ -31,35 +22,24 @@ type AppearanceDraftPreviewProviderProps = {
 }
 
 /**
- * Isolated draft preview scope. Applies allowlisted appearance attributes only to
- * the preview wrapper — never to document.documentElement / live AppearanceProvider.
+ * Isolated draft preview scope. Allowlisted appearance attributes and
+ * data-appearance-scope are rendered declaratively on the wrapper only —
+ * never on document.documentElement / live AppearanceProvider.
  */
 export function AppearanceDraftPreviewProvider({
   config,
   className = "",
   children,
 }: AppearanceDraftPreviewProviderProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
   const value = useMemo(() => ({ config }), [config])
-
-  useEffect(() => {
-    const target = containerRef.current
-    if (!target) return
-
-    target.setAttribute(APPEARANCE_SCOPE_ATTR, "preview")
-    const snapshot: AppearanceAttributeSnapshot = applyAppearanceAttributes(target, config)
-
-    return () => {
-      restoreAppearanceAttributes(target, snapshot)
-      target.removeAttribute(APPEARANCE_SCOPE_ATTR)
-    }
-  }, [config])
+  const appearanceAttrs = useMemo(() => appearanceConfigToDataAttributes(config), [config])
 
   return (
     <AppearanceDraftPreviewContext.Provider value={value}>
       <div
-        ref={containerRef}
         className={["appearance-draft-preview-scope", className].filter(Boolean).join(" ")}
+        {...{ [APPEARANCE_SCOPE_ATTR]: "preview" }}
+        {...appearanceAttrs}
       >
         {children}
       </div>

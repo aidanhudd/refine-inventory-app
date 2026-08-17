@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import AdminSubNav from "../../components/AdminSubNav"
 import AppearanceDraftPreviewFrame, {
   type AppearancePreviewWidth,
@@ -61,16 +61,26 @@ function issueSummary(issues: AppearanceValidationIssue[]): string {
     .join(" ")
 }
 
+function resetEditorDefaults(): {
+  draft: AppearanceConfig
+  baseline: string
+} {
+  const draft = cloneAppearanceConfig()
+  return { draft, baseline: serializeConfig(draft) }
+}
+
 export default function AdminAppearancePage() {
   const { user, profile, loading: authLoading } = useAuth()
 
-  const adminReady =
+  const adminIdentityKey =
     !authLoading &&
-    !!user?.id &&
-    !!profile &&
+    user?.id &&
+    profile &&
     profile.id === user.id &&
     profile.approved === true &&
     isAdmin(profile.role)
+      ? user.id
+      : null
 
   const [draft, setDraft] = useState<AppearanceConfig>(() => cloneAppearanceConfig())
   const [baseline, setBaseline] = useState<string>(() =>
@@ -82,71 +92,102 @@ export default function AdminAppearancePage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [previewWidth, setPreviewWidth] = useState<AppearancePreviewWidth>("desktop")
 
+  const loadRequestIdRef = useRef(0)
+  const saveRequestIdRef = useRef(0)
+  const saveInFlightRef = useRef(false)
+  const saveSnapshotRef = useRef<string | null>(null)
+  const dirtyRef = useRef(false)
+  const adminIdentityKeyRef = useRef(adminIdentityKey)
+  adminIdentityKeyRef.current = adminIdentityKey
+
   const dirty = serializeConfig(draft) !== baseline
+  dirtyRef.current = dirty
+
   const strictValidation = useMemo(() => validateAppearanceConfigStrict(draft), [draft])
   const titleError = titleFieldError(draft.branding.appTitle)
+  const controlsDisabled = editorStatus === "saving"
   const canSave =
-    adminReady &&
+    !!adminIdentityKey &&
     editorStatus !== "loading" &&
     editorStatus !== "saving" &&
     dirty &&
     strictValidation.ok &&
     !titleError
 
-  const loadDraft = useCallback(async () => {
-    if (!adminReady) return
+  const applyEditorReset = useCallback((status: EditorStatus = "idle") => {
+    const next = resetEditorDefaults()
+    setDraft(next.draft)
+    setBaseline(next.baseline)
+    setLoadWarning(null)
+    setSaveMessage(null)
+    setSaveError(null)
+    setEditorStatus(status)
+  }, [])
+
+  useEffect(() => {
+    if (!adminIdentityKey) {
+      loadRequestIdRef.current += 1
+      saveRequestIdRef.current += 1
+      saveInFlightRef.current = false
+      saveSnapshotRef.current = null
+      applyEditorReset("idle")
+      return
+    }
+
+    const requestId = ++loadRequestIdRef.current
+    const identityForRequest = adminIdentityKey
+    let cancelled = false
 
     setEditorStatus("loading")
     setLoadWarning(null)
     setSaveMessage(null)
     setSaveError(null)
 
-    const result = await getAppearanceDraft()
+    void getAppearanceDraft().then((result) => {
+      if (cancelled || requestId !== loadRequestIdRef.current) return
+      if (identityForRequest !== adminIdentityKeyRef.current) return
 
-    if (result.status === "missing") {
+      if (result.status === "missing") {
+        const next = cloneAppearanceConfig()
+        setDraft(next)
+        setBaseline(serializeConfig(next))
+        setEditorStatus("ready")
+        return
+      }
+
+      if (result.status === "draft") {
+        setDraft(cloneAppearanceConfig(result.row.config))
+        setBaseline(serializeConfig(result.row.config))
+        setEditorStatus("ready")
+        return
+      }
+
+      if (result.status === "invalid") {
+        const next = cloneAppearanceConfig(result.fallbackConfig)
+        setDraft(next)
+        setBaseline(serializeConfig(next))
+        setLoadWarning(
+          `${result.message} Showing compiled defaults in the editor. ${issueSummary(result.issues)}`,
+        )
+        setEditorStatus("ready")
+        return
+      }
+
       const next = cloneAppearanceConfig()
       setDraft(next)
       setBaseline(serializeConfig(next))
-      setEditorStatus("ready")
-      return
-    }
-
-    if (result.status === "draft") {
-      setDraft(cloneAppearanceConfig(result.row.config))
-      setBaseline(serializeConfig(result.row.config))
-      setEditorStatus("ready")
-      return
-    }
-
-    if (result.status === "invalid") {
-      const next = cloneAppearanceConfig(result.fallbackConfig)
-      setDraft(next)
-      setBaseline(serializeConfig(next))
-      setLoadWarning(
-        `${result.message} Showing compiled defaults in the editor. ${issueSummary(result.issues)}`,
+      setSaveError(
+        result.status === "timeout"
+          ? `Draft load timed out: ${result.message}`
+          : `Could not load draft: ${result.message}`,
       )
-      setEditorStatus("ready")
-      return
-    }
+      setEditorStatus("error")
+    })
 
-    const next = cloneAppearanceConfig()
-    setDraft(next)
-    setBaseline(serializeConfig(next))
-    setSaveError(
-      result.status === "timeout"
-        ? `Draft load timed out: ${result.message}`
-        : `Could not load draft: ${result.message}`,
-    )
-    setEditorStatus("error")
-  }, [adminReady])
-
-  useEffect(() => {
-    if (!adminReady) {
-      setEditorStatus("idle")
-      return
+    return () => {
+      cancelled = true
     }
-    void loadDraft()
-  }, [adminReady, loadDraft])
+  }, [adminIdentityKey, applyEditorReset])
 
   useEffect(() => {
     if (!dirty) return
@@ -160,7 +201,58 @@ export default function AdminAppearancePage() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload)
   }, [dirty])
 
+  useEffect(() => {
+    if (!dirty) return
+
+    const onDocumentClick = (event: MouseEvent) => {
+      if (!dirtyRef.current) return
+      if (event.defaultPrevented) return
+      if (event.button !== 0) return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+
+      const target = event.target
+      if (!(target instanceof Element)) return
+
+      const anchor = target.closest("a[href]")
+      if (!(anchor instanceof HTMLAnchorElement)) return
+      if (anchor.hasAttribute("download")) return
+
+      const targetAttr = anchor.getAttribute("target")
+      if (targetAttr && targetAttr !== "_self") return
+
+      const href = anchor.getAttribute("href")
+      if (!href || href.startsWith("#")) return
+
+      let url: URL
+      try {
+        url = new URL(href, window.location.href)
+      } catch {
+        return
+      }
+
+      if (url.origin !== window.location.origin) return
+      if (
+        url.pathname === window.location.pathname &&
+        url.search === window.location.search
+      ) {
+        return
+      }
+
+      const confirmed = window.confirm(
+        "You have unsaved appearance draft changes. Leave this page?",
+      )
+      if (!confirmed) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
+    }
+
+    document.addEventListener("click", onDocumentClick, true)
+    return () => document.removeEventListener("click", onDocumentClick, true)
+  }, [dirty])
+
   const updateDraft = (updater: (prev: AppearanceConfig) => AppearanceConfig) => {
+    if (controlsDisabled) return
     setDraft((prev) => updater(prev))
     setSaveMessage(null)
     setSaveError(null)
@@ -170,7 +262,13 @@ export default function AdminAppearancePage() {
   }
 
   const saveDraft = async () => {
-    if (!canSave) return
+    if (!adminIdentityKey || !canSave || saveInFlightRef.current) return
+
+    const identityForSave = adminIdentityKey
+    const requestId = ++saveRequestIdRef.current
+    const snapshot = serializeConfig(draft)
+    saveInFlightRef.current = true
+    saveSnapshotRef.current = snapshot
 
     setEditorStatus("saving")
     setSaveMessage(null)
@@ -178,11 +276,19 @@ export default function AdminAppearancePage() {
 
     const result = await upsertAppearanceDraft(draft)
 
+    saveInFlightRef.current = false
+
+    if (requestId !== saveRequestIdRef.current) return
+    if (identityForSave !== adminIdentityKeyRef.current) return
+    // Defense in depth: ignore if the in-memory draft diverged from the save snapshot.
+    if (saveSnapshotRef.current !== snapshot) return
+
     if (result.status === "saved") {
       setDraft(cloneAppearanceConfig(result.row.config))
       setBaseline(serializeConfig(result.row.config))
       setSaveMessage("Draft saved. Changes are not live until published.")
       setEditorStatus("saved")
+      saveSnapshotRef.current = null
       return
     }
 
@@ -200,7 +306,7 @@ export default function AdminAppearancePage() {
     setEditorStatus("error")
   }
 
-  if (authLoading || !adminReady) {
+  if (authLoading || !adminIdentityKey) {
     return (
       <main>
         <AdminSubNav />
@@ -260,7 +366,7 @@ export default function AdminAppearancePage() {
       ) : (
         <div className="appearance-editor-layout">
           <section className="card appearance-editor-controls" aria-label="Appearance draft controls">
-            <fieldset className="appearance-editor-fieldset">
+            <fieldset className="appearance-editor-fieldset" disabled={controlsDisabled}>
               <legend>Branding</legend>
               <div className="appearance-editor-field">
                 <label htmlFor="appearance-app-title">App title</label>
@@ -278,7 +384,9 @@ export default function AdminAppearancePage() {
                     }))
                   }
                   aria-invalid={titleError ? true : undefined}
-                  aria-describedby={titleError ? "appearance-app-title-error" : "appearance-app-title-hint"}
+                  aria-describedby={
+                    titleError ? "appearance-app-title-error" : "appearance-app-title-hint"
+                  }
                 />
                 <p id="appearance-app-title-hint" className="small">
                   1–{APP_TITLE_MAX_LENGTH} characters. Trimmed on save; single line only.
@@ -291,7 +399,7 @@ export default function AdminAppearancePage() {
               </div>
             </fieldset>
 
-            <fieldset className="appearance-editor-fieldset">
+            <fieldset className="appearance-editor-fieldset" disabled={controlsDisabled}>
               <legend>Theme and density</legend>
 
               <div className="appearance-editor-field">

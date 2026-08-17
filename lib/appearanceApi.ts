@@ -3,6 +3,7 @@ import {
   withTimeout,
 } from "./asyncUtils"
 import {
+  APPEARANCE_SCHEMA_VERSION,
   cloneAppearanceConfig,
   resolveAppearanceConfig,
   validateAppearanceConfigStrict,
@@ -167,6 +168,32 @@ function mapDraftRow(data: AppearanceDraftRpcRow): {
   }
 }
 
+function unsupportedDraftSchemaResult(mapped: {
+  id: string
+  updatedAt: string
+  restoredFromVersionId: string | null
+  configSchemaVersion: number
+}): Extract<GetAppearanceDraftResult, { status: "invalid" }> {
+  return {
+    status: "invalid",
+    message: `Draft config_schema_version must be ${APPEARANCE_SCHEMA_VERSION} (got ${mapped.configSchemaVersion}).`,
+    issues: [
+      {
+        path: "config_schema_version",
+        message: `Must be ${APPEARANCE_SCHEMA_VERSION} (got ${mapped.configSchemaVersion}).`,
+      },
+    ],
+    fallbackConfig: cloneAppearanceConfig(),
+    draftId: mapped.id,
+    updatedAt: mapped.updatedAt,
+    restoredFromVersionId: mapped.restoredFromVersionId,
+  }
+}
+
+function isSupportedDraftSchemaVersion(version: number): boolean {
+  return version === APPEARANCE_SCHEMA_VERSION
+}
+
 function validateDraftConfig(config: unknown): {
   ok: true
   config: AppearanceConfig
@@ -273,6 +300,10 @@ export async function getAppearanceDraft(): Promise<GetAppearanceDraftResult> {
       }
     }
 
+    if (!isSupportedDraftSchemaVersion(mapped.configSchemaVersion)) {
+      return unsupportedDraftSchemaResult(mapped)
+    }
+
     const validated = validateDraftConfig(mapped.config)
     if (!validated.ok) {
       return {
@@ -363,6 +394,16 @@ export async function upsertAppearanceDraft(
       return {
         status: "error",
         message: "Upsert appearance draft returned an unexpected shape.",
+      }
+    }
+
+    if (!isSupportedDraftSchemaVersion(mapped.configSchemaVersion)) {
+      const invalid = unsupportedDraftSchemaResult(mapped)
+      return {
+        status: "validation",
+        message: invalid.message,
+        issues: invalid.issues,
+        source: "server",
       }
     }
 
