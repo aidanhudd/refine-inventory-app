@@ -1,6 +1,6 @@
 "use client"
 
-import { FormEvent, useMemo, useState } from "react"
+import { FormEvent, useMemo, useState, type ReactNode } from "react"
 import NewCustomerForm from "./NewCustomerForm"
 import NewJobForm from "./NewJobForm"
 import {
@@ -46,6 +46,7 @@ type CustomersJobsViewProps = {
   items: Item[]
   currentUserId: string | null | undefined
   role: string | null | undefined
+  navToggle?: ReactNode
   onCustomersChange: (customers: Customer[]) => void
   onJobUpsert: (job: JobWithCustomer) => void
   onJobRemove: (jobId: string) => void
@@ -62,6 +63,7 @@ export default function CustomersJobsView({
   items,
   currentUserId,
   role,
+  navToggle,
   onCustomersChange,
   onJobUpsert,
   onJobRemove,
@@ -463,6 +465,7 @@ export default function CustomersJobsView({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
+        {navToggle}
         <div className="customers-jobs-toolbar-actions">
           <button type="button" className="btn-secondary btn-small" onClick={startAddCustomer}>
             + Add Customer

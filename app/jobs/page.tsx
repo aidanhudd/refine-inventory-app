@@ -61,7 +61,7 @@ type HoldGroup = {
 export default function JobsPage() {
   const { hidePrices } = useHidePrices()
   const { user, profile } = useAuth()
-  const [viewMode, setViewMode] = useState<JobsViewMode>("usage")
+  const [viewMode, setViewMode] = useState<JobsViewMode>("customers")
   const [usage, setUsage] = useState<UsageRow[]>([])
   const [items, setItems] = useState<Item[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -371,6 +371,35 @@ export default function JobsPage() {
         ? "Review inventory currently on hold for customers."
         : "Manage customers and jobs, including archive, reopen, and unused deletion."
 
+  const viewToggle = (
+    <div className="toolbar-view-toggle" role="group" aria-label="Jobs page view">
+      <button
+        type="button"
+        className={`toolbar-view-btn ${viewMode === "customers" ? "toolbar-view-btn-active" : ""}`}
+        onClick={() => setViewMode("customers")}
+        aria-pressed={viewMode === "customers"}
+      >
+        Customers & Jobs
+      </button>
+      <button
+        type="button"
+        className={`toolbar-view-btn ${viewMode === "holds" ? "toolbar-view-btn-active" : ""}`}
+        onClick={() => setViewMode("holds")}
+        aria-pressed={viewMode === "holds"}
+      >
+        Holds
+      </button>
+      <button
+        type="button"
+        className={`toolbar-view-btn ${viewMode === "usage" ? "toolbar-view-btn-active" : ""}`}
+        onClick={() => setViewMode("usage")}
+        aria-pressed={viewMode === "usage"}
+      >
+        Job Usage
+      </button>
+    </div>
+  )
+
   return (
     <main>
       <h1>Jobs & Holds</h1>
@@ -379,43 +408,17 @@ export default function JobsPage() {
       {message && <div className="success page-feedback">{message}</div>}
       {errorMessage && <div className="notice page-feedback">{errorMessage}</div>}
 
-      <div className="jobs-toolbar">
-        {viewMode !== "customers" && (
+      {viewMode !== "customers" && (
+        <div className="jobs-toolbar">
           <input
             className="search jobs-search"
             placeholder={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-        )}
-
-        <div className="toolbar-view-toggle" role="group" aria-label="Jobs page view">
-          <button
-            type="button"
-            className={`toolbar-view-btn ${viewMode === "usage" ? "toolbar-view-btn-active" : ""}`}
-            onClick={() => setViewMode("usage")}
-            aria-pressed={viewMode === "usage"}
-          >
-            Job Usage
-          </button>
-          <button
-            type="button"
-            className={`toolbar-view-btn ${viewMode === "holds" ? "toolbar-view-btn-active" : ""}`}
-            onClick={() => setViewMode("holds")}
-            aria-pressed={viewMode === "holds"}
-          >
-            On Hold
-          </button>
-          <button
-            type="button"
-            className={`toolbar-view-btn ${viewMode === "customers" ? "toolbar-view-btn-active" : ""}`}
-            onClick={() => setViewMode("customers")}
-            aria-pressed={viewMode === "customers"}
-          >
-            Customers & Jobs
-          </button>
+          {viewToggle}
         </div>
-      </div>
+      )}
 
       {viewMode === "usage" && (
         <label className="jobs-include-completed">
@@ -436,6 +439,7 @@ export default function JobsPage() {
           items={items}
           currentUserId={user?.id}
           role={profile?.role}
+          navToggle={viewToggle}
           onCustomersChange={(nextCustomers) => {
             setCustomers(nextCustomers)
             const byId = new Map(nextCustomers.map((customer) => [customer.id, customer]))
