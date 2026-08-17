@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation"
 import NavBar from "./NavBar"
 import { useAuth } from "./AuthProvider"
 import { hasAppAccess, isAdmin } from "../../lib/profiles"
+import { Button, Card, EmptyState, Notice } from "./ui"
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -51,7 +52,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (loading) {
     return (
       <main>
-        <div className="empty">Checking your session...</div>
+        <EmptyState>Checking your session...</EmptyState>
       </main>
     )
   }
@@ -59,29 +60,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   if (authError) {
     return (
       <main>
-        <section className="card auth-error-card">
+        <Card className="auth-error-card">
           <h2>Could not start the app</h2>
           <p className="subtext">
             Session verification failed. This can happen when browser storage is blocked or the auth
             service is slow to respond.
           </p>
-          <div className="notice page-feedback">{authError}</div>
+          <Notice className="page-feedback">{authError}</Notice>
           <p className="small">
             Open the browser developer console for the full error details, then try again.
           </p>
           <div className="action-row">
-            <button type="button" className="btn-primary btn-small" onClick={() => window.location.reload()}>
+            <Button variant="primary" size="sm" onClick={() => window.location.reload()}>
               Retry
-            </button>
-            <button
-              type="button"
-              className="btn-secondary btn-small"
-              onClick={() => router.replace("/login")}
-            >
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => router.replace("/login")}>
               Go to sign in
-            </button>
+            </Button>
           </div>
-        </section>
+        </Card>
       </main>
     )
   }

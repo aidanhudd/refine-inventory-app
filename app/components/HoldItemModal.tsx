@@ -5,6 +5,7 @@ import CustomerPicker from "./CustomerPicker"
 import JobPicker from "./JobPicker"
 import NewCustomerForm from "./NewCustomerForm"
 import NewJobForm from "./NewJobForm"
+import { Button, ModalShell, Notice } from "./ui"
 import {
   fetchItemHoldFields,
   loadActiveJobsWithCustomers,
@@ -181,24 +182,17 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
       : "No jobs match your search."
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={() => {
+    <ModalShell
+      ariaLabel={title}
+      onOverlayClick={() => {
         if (!submitting) onClose()
       }}
     >
-      <div
-        className="modal-panel modal-panel-job-flow"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-      >
         <div className="job-flow-header">
           {step !== "hold" && (
-            <button
-              type="button"
-              className="btn-secondary btn-small"
+            <Button
+              variant="secondary"
+              size="sm"
               disabled={submitting}
               onClick={() => {
                 setFormError("")
@@ -207,17 +201,17 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
               }}
             >
               ← Back
-            </button>
+            </Button>
           )}
           <h3>{title}</h3>
         </div>
 
-        {loadError && <div className="notice">{loadError}</div>}
-        {formError && <div className="notice">{formError}</div>}
+        {loadError && <Notice>{loadError}</Notice>}
+        {formError && <Notice>{formError}</Notice>}
 
         {step === "hold" && (
           <div className="job-flow-body">
-            <p className="subtext" style={{ marginBottom: 8 }}>
+            <p className="subtext job-flow-lead">
               Customer is required. Job is optional. Archived customers are hidden.
             </p>
 
@@ -287,17 +281,16 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
             )}
 
             <div className="modal-actions">
-              <button type="button" onClick={onClose} disabled={submitting}>
+              <Button onClick={onClose} disabled={submitting}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
+              </Button>
+              <Button
+                variant="primary"
                 disabled={submitting || !selectedCustomer}
                 onClick={() => void handlePlaceHold()}
               >
                 {submitting ? "Saving…" : "Place Hold"}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -346,7 +339,6 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
             onError={setFormError}
           />
         )}
-      </div>
-    </div>
+    </ModalShell>
   )
 }

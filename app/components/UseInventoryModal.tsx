@@ -5,6 +5,7 @@ import CustomerPicker from "./CustomerPicker"
 import JobPicker from "./JobPicker"
 import NewCustomerForm from "./NewCustomerForm"
 import NewJobForm from "./NewJobForm"
+import { Button, ModalShell, Notice } from "./ui"
 import {
   loadActiveJobsWithCustomers,
   loadCustomersOrdered,
@@ -129,24 +130,17 @@ export default function UseInventoryModal({ itemName, onClose, onConfirm }: UseI
         : "New Customer"
 
   return (
-    <div
-      onClick={() => {
+    <ModalShell
+      ariaLabel={title}
+      onOverlayClick={() => {
         if (!submitting) onClose()
       }}
-      className="modal-overlay"
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="modal-panel modal-panel-job-flow"
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-      >
         <div className="job-flow-header">
           {step !== "use" && (
-            <button
-              type="button"
-              className="btn-secondary btn-small"
+            <Button
+              variant="secondary"
+              size="sm"
               disabled={submitting}
               onClick={() => {
                 setFormError("")
@@ -154,13 +148,13 @@ export default function UseInventoryModal({ itemName, onClose, onConfirm }: UseI
               }}
             >
               ← Back
-            </button>
+            </Button>
           )}
           <h3>{title}</h3>
         </div>
 
-        {loadError && <div className="notice">{loadError}</div>}
-        {formError && <div className="notice">{formError}</div>}
+        {loadError && <Notice>{loadError}</Notice>}
+        {formError && <Notice>{formError}</Notice>}
 
         {step === "use" && (
           <div className="job-flow-body">
@@ -198,17 +192,16 @@ export default function UseInventoryModal({ itemName, onClose, onConfirm }: UseI
             />
 
             <div className="modal-actions">
-              <button type="button" onClick={onClose} disabled={submitting}>
+              <Button onClick={onClose} disabled={submitting}>
                 Cancel
-              </button>
-              <button
-                type="button"
-                className="btn-primary"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={() => void handleConfirmUse()}
                 disabled={submitting}
               >
                 {submitting ? "Saving…" : "Confirm"}
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -264,7 +257,6 @@ export default function UseInventoryModal({ itemName, onClose, onConfirm }: UseI
             onError={setFormError}
           />
         )}
-      </div>
-    </div>
+    </ModalShell>
   )
 }

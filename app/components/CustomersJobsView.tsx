@@ -21,6 +21,7 @@ import {
   type Customer,
   type JobWithCustomer,
 } from "../../lib/customersJobs"
+import { Button, EmptyState, FilterCheckbox, SearchField, Toolbar } from "./ui"
 
 type UsageRow = {
   id: string
@@ -458,41 +459,35 @@ export default function CustomersJobsView({
 
   return (
     <div className="customers-jobs-view">
-      <div className="jobs-toolbar">
-        <input
-          className="search jobs-search"
+      <Toolbar>
+        <SearchField
+          className="jobs-search"
           placeholder="Search customers or jobs…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
         {navToggle}
         <div className="customers-jobs-toolbar-actions">
-          <button type="button" className="btn-secondary btn-small" onClick={startAddCustomer}>
+          <Button variant="secondary" size="sm" onClick={startAddCustomer}>
             + Add Customer
-          </button>
-          <button type="button" className="btn-secondary btn-small" onClick={startAddJob}>
+          </Button>
+          <Button variant="secondary" size="sm" onClick={startAddJob}>
             + Add Job
-          </button>
+          </Button>
         </div>
-      </div>
+      </Toolbar>
 
       <div className="customers-jobs-filters">
-        <label className="jobs-include-completed">
-          <input
-            type="checkbox"
-            checked={includeArchived}
-            onChange={(e) => setIncludeArchived(e.target.checked)}
-          />
-          Include archived customers
-        </label>
-        <label className="jobs-include-completed">
-          <input
-            type="checkbox"
-            checked={includeCompletedJobs}
-            onChange={(e) => setIncludeCompletedJobs(e.target.checked)}
-          />
-          Include completed / archived jobs
-        </label>
+        <FilterCheckbox
+          label="Include archived customers"
+          checked={includeArchived}
+          onChange={(e) => setIncludeArchived(e.target.checked)}
+        />
+        <FilterCheckbox
+          label="Include completed / archived jobs"
+          checked={includeCompletedJobs}
+          onChange={(e) => setIncludeCompletedJobs(e.target.checked)}
+        />
       </div>
 
       {createPanel === "customer" && (
@@ -524,7 +519,7 @@ export default function CustomersJobsView({
         )}
 
       {visibleCustomers.length === 0 ? (
-        <div className="empty">No customers yet.</div>
+        <EmptyState>No customers yet.</EmptyState>
       ) : (
         visibleCustomers.map((customer) => {
           const expanded = expandedCustomerIds.has(customer.id)

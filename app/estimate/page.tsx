@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "../../lib/supabaseClient"
 import { useHidePrices } from "../components/HidePricesProvider"
+import { Button, Card, Notice, PageHeader } from "../components/ui"
 
 type InventoryItem = {
   id: string
@@ -102,12 +103,12 @@ export default function EstimatePage() {
 
   return (
     <main>
-      <h1>Estimate Builder</h1>
-      <p className="subtext" style={{ marginBottom: "16px" }}>
-        Build a quick material estimate{hidePrices ? "" : " and total"} before creating the final proposal.
-      </p>
+      <PageHeader
+        title="Estimate Builder"
+        description={`Build a quick material estimate${hidePrices ? "" : " and total"} before creating the final proposal.`}
+      />
 
-      <section className="card form-grid">
+      <Card className="form-grid">
         <div className="field">
           <label>Job Name</label>
           <input value={jobName} onChange={(e) => setJobName(e.target.value)} placeholder="Kitchen Remodel" />
@@ -116,11 +117,11 @@ export default function EstimatePage() {
           <label>Client Name</label>
           <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Smith Family" />
         </div>
-      </section>
+      </Card>
 
-      <section className="card section-gap">
-        <h2 style={{ marginBottom: "12px" }}>Line Items</h2>
-        {loadError && <div className="notice">Could not load inventory products: {loadError}</div>}
+      <Card className="section-gap">
+        <h2 className="estimate-section-title">Line Items</h2>
+        {loadError && <Notice>Could not load inventory products: {loadError}</Notice>}
         <div className="list">
           {lines.map((line) => {
             const lineTotal = toNumber(line.quantity) * toNumber(line.unitCost)
@@ -181,11 +182,11 @@ export default function EstimatePage() {
                 {selectedInventoryItem?.quantity_type && (
                   <p className="small">Unit type: {selectedInventoryItem.quantity_type}</p>
                 )}
-                <div className="action-row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                <div className="action-row estimate-line-actions">
                   {!hidePrices && <strong>Line Total: {currency(lineTotal)}</strong>}
-                  <button className="btn-secondary btn-small" onClick={() => removeLine(line.id)} type="button">
+                  <Button variant="secondary" size="sm" onClick={() => removeLine(line.id)}>
                     Remove
-                  </button>
+                  </Button>
                 </div>
               </div>
             )
@@ -193,14 +194,14 @@ export default function EstimatePage() {
         </div>
 
         <div className="action-row">
-          <button className="btn-primary btn-small" type="button" onClick={addLine}>
+          <Button variant="primary" size="sm" onClick={addLine}>
             Add Item
-          </button>
+          </Button>
         </div>
-      </section>
+      </Card>
 
-      <section className="card section-gap">
-        <h2 style={{ marginBottom: "10px" }}>Estimate Summary</h2>
+      <Card className="section-gap">
+        <h2 className="estimate-section-title">Estimate Summary</h2>
         <p>
           <strong>Job:</strong> {jobName || "Not set"}
         </p>
@@ -208,11 +209,11 @@ export default function EstimatePage() {
           <strong>Client:</strong> {clientName || "Not set"}
         </p>
         {!hidePrices && (
-          <p style={{ marginTop: "10px" }}>
+          <p className="estimate-subtotal">
             <strong>Subtotal:</strong> {currency(subtotal)}
           </p>
         )}
-      </section>
+      </Card>
     </main>
   )
 }

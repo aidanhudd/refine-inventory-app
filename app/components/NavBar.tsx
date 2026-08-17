@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabaseClient"
 import { useAuth } from "./AuthProvider"
 import { isAdmin } from "../../lib/profiles"
 import HidePricesSwitch from "./HidePricesSwitch"
+import { Button } from "./ui"
 
 export default function NavBar() {
   const pathname = usePathname()
@@ -18,12 +19,10 @@ export default function NavBar() {
   if (!user) return null
 
   return (
-    <div style={{ display: "grid", gap: "8px", justifyItems: "end" }}>
+    <div className="nav-bar">
       <div className="nav-bar-meta">
         <HidePricesSwitch />
-        <div className="small" style={{ marginTop: 0 }}>
-          Signed in as {user.email}
-        </div>
+        <div className="small">Signed in as {user.email}</div>
       </div>
       <nav className="nav-links" aria-label="Primary">
         <Link href="/" className={linkClass("/")}>
@@ -44,15 +43,15 @@ export default function NavBar() {
           </Link>
         )}
 
-        <button
-          className="btn-secondary btn-small"
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={() => {
             supabase.auth.signOut()
           }}
-          type="button"
         >
           Sign out
-        </button>
+        </Button>
       </nav>
     </div>
   )

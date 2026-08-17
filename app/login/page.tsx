@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react"
 import { supabase } from "../../lib/supabaseClient"
+import { Button, Card, Notice } from "../components/ui"
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin")
@@ -64,17 +65,17 @@ export default function LoginPage() {
   }
 
   return (
-    <main style={{ maxWidth: 520 }}>
-      <section className="card">
+    <main className="auth-main">
+      <Card>
         <h2>{mode === "signin" ? "Sign in" : "Create account"}</h2>
-        <p className="subtext" style={{ marginBottom: "16px" }}>
+        <p className="subtext auth-lead">
           {mode === "signin"
             ? "Use your email and password to sign in."
             : "Create an account with your work email. An administrator must approve you before you can access inventory."}
         </p>
 
-        {successMessage && <div className="success">{successMessage}</div>}
-        {errorMessage && <div className="notice">{errorMessage}</div>}
+        {successMessage && <Notice tone="success">{successMessage}</Notice>}
+        {errorMessage && <Notice>{errorMessage}</Notice>}
 
         <form className="form-grid" onSubmit={onSubmit}>
           <div className="field">
@@ -112,19 +113,19 @@ export default function LoginPage() {
             </div>
           )}
 
-          <button className="btn-primary" type="submit" disabled={loading}>
+          <Button variant="primary" type="submit" disabled={loading}>
             {loading
               ? mode === "signin"
                 ? "Signing in..."
                 : "Creating account..."
               : mode === "signin"
-              ? "Sign in"
-              : "Create account"}
-          </button>
+                ? "Sign in"
+                : "Create account"}
+          </Button>
 
-          <button
-            className="btn-secondary"
-            type="button"
+          <Button
+            variant="secondary"
+            disabled={loading}
             onClick={() => {
               setMode((prev) => (prev === "signin" ? "signup" : "signin"))
               setErrorMessage("")
@@ -134,9 +135,9 @@ export default function LoginPage() {
             }}
           >
             {mode === "signin" ? "Need an account? Sign up" : "Already have an account? Sign in"}
-          </button>
+          </Button>
         </form>
-      </section>
+      </Card>
     </main>
   )
 }

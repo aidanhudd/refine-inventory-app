@@ -25,6 +25,7 @@ import {
   type Job,
   type JobWithCustomer,
 } from "../../lib/customersJobs"
+import { EmptyState, FilterCheckbox, Notice, PageHeader, SearchField, Toolbar, ViewToggle } from "../components/ui"
 
 type UsageRow = {
   id: string
@@ -372,63 +373,56 @@ export default function JobsPage() {
         : "Manage customers and jobs, including archive, reopen, and unused deletion."
 
   const viewToggle = (
-    <div className="toolbar-view-toggle" role="group" aria-label="Jobs page view">
-      <button
-        type="button"
-        className={`toolbar-view-btn ${viewMode === "customers" ? "toolbar-view-btn-active" : ""}`}
-        onClick={() => setViewMode("customers")}
-        aria-pressed={viewMode === "customers"}
-      >
-        Customers & Jobs
-      </button>
-      <button
-        type="button"
-        className={`toolbar-view-btn ${viewMode === "holds" ? "toolbar-view-btn-active" : ""}`}
-        onClick={() => setViewMode("holds")}
-        aria-pressed={viewMode === "holds"}
-      >
-        Holds
-      </button>
-      <button
-        type="button"
-        className={`toolbar-view-btn ${viewMode === "usage" ? "toolbar-view-btn-active" : ""}`}
-        onClick={() => setViewMode("usage")}
-        aria-pressed={viewMode === "usage"}
-      >
-        Job Usage
-      </button>
-    </div>
+    <ViewToggle
+      ariaLabel="Jobs page view"
+      options={[
+        {
+          id: "customers",
+          label: "Customers & Jobs",
+          active: viewMode === "customers",
+          onSelect: () => setViewMode("customers"),
+        },
+        {
+          id: "holds",
+          label: "Holds",
+          active: viewMode === "holds",
+          onSelect: () => setViewMode("holds"),
+        },
+        {
+          id: "usage",
+          label: "Job Usage",
+          active: viewMode === "usage",
+          onSelect: () => setViewMode("usage"),
+        },
+      ]}
+    />
   )
 
   return (
     <main>
-      <h1>Jobs & Holds</h1>
-      <p className="subtext section-gap">{subtext}</p>
+      <PageHeader title="Jobs & Holds" description={subtext} />
 
-      {message && <div className="success page-feedback">{message}</div>}
-      {errorMessage && <div className="notice page-feedback">{errorMessage}</div>}
+      {message && <Notice tone="success" className="page-feedback">{message}</Notice>}
+      {errorMessage && <Notice className="page-feedback">{errorMessage}</Notice>}
 
       {viewMode !== "customers" && (
-        <div className="jobs-toolbar">
-          <input
-            className="search jobs-search"
+        <Toolbar>
+          <SearchField
+            className="jobs-search"
             placeholder={searchPlaceholder}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
           {viewToggle}
-        </div>
+        </Toolbar>
       )}
 
       {viewMode === "usage" && (
-        <label className="jobs-include-completed">
-          <input
-            type="checkbox"
-            checked={includeCompletedJobs}
-            onChange={(e) => setIncludeCompletedJobs(e.target.checked)}
-          />
-          Include completed / archived jobs
-        </label>
+        <FilterCheckbox
+          label="Include completed / archived jobs"
+          checked={includeCompletedJobs}
+          onChange={(e) => setIncludeCompletedJobs(e.target.checked)}
+        />
       )}
 
       {viewMode === "customers" ? (
@@ -472,7 +466,7 @@ export default function JobsPage() {
         />
       ) : viewMode === "usage" ? (
         jobGroups.length === 0 ? (
-          <div className="empty">No jobs or usage yet.</div>
+          <EmptyState>No jobs or usage yet.</EmptyState>
         ) : (
           jobGroups.map((group) => {
             let total = 0
@@ -573,7 +567,7 @@ export default function JobsPage() {
           })
         )
       ) : holdGroups.length === 0 ? (
-        <div className="empty">No items on hold.</div>
+        <EmptyState>No items on hold.</EmptyState>
       ) : (
         holdGroups.map((group) => (
           <div key={group.key} className="card jobs-group-card">

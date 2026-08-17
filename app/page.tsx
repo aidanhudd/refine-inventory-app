@@ -20,6 +20,7 @@ import {
 } from "../lib/inventoryDimensions"
 import { canUndoSharedUsage, formatPhase2Error } from "../lib/customersJobs"
 import { releaseItemHoldRpc } from "../lib/customerJobApi"
+import { Button, EmptyState, Notice, SearchField, Toolbar, ViewToggle } from "./components/ui"
 
 type Category = {
   id: string
@@ -1302,39 +1303,37 @@ export default function Home() {
         </div>
       </div>
 
-      {message && <div className="success page-feedback">{message}</div>}
-      {errorMessage && <div className="notice page-feedback">{errorMessage}</div>}
+      {message && <Notice tone="success" className="page-feedback">{message}</Notice>}
+      {errorMessage && <Notice className="page-feedback">{errorMessage}</Notice>}
 
       <section className="inventory-section">
-          <div className="toolbar">
-            <input
-              className="search"
+          <Toolbar sticky>
+            <SearchField
               placeholder="Search name, SKU, category, subcategory, location, notes..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
-            <div className="toolbar-view-toggle" role="group" aria-label="Inventory view mode">
-              <button
-                type="button"
-                className={`toolbar-view-btn ${!isCategoryView ? "toolbar-view-btn-active" : ""}`}
-                onClick={() => setViewMode("list")}
-                aria-pressed={!isCategoryView}
-              >
-                List
-              </button>
-              <button
-                type="button"
-                className={`toolbar-view-btn ${isCategoryView ? "toolbar-view-btn-active" : ""}`}
-                onClick={() => setViewMode("category")}
-                aria-pressed={isCategoryView}
-              >
-                Category
-              </button>
-            </div>
-            <button type="button" className="btn-primary toolbar-add-btn" onClick={openAddForm}>
+            <ViewToggle
+              ariaLabel="Inventory view mode"
+              options={[
+                {
+                  id: "list",
+                  label: "List",
+                  active: !isCategoryView,
+                  onSelect: () => setViewMode("list"),
+                },
+                {
+                  id: "category",
+                  label: "Category",
+                  active: isCategoryView,
+                  onSelect: () => setViewMode("category"),
+                },
+              ]}
+            />
+            <Button variant="primary" className="toolbar-add-btn" onClick={openAddForm}>
               Add Inventory
-            </button>
-          </div>
+            </Button>
+          </Toolbar>
 
           <div className={`category-picker-card ${categoryPickerCollapsed ? "category-picker-collapsed" : ""}`}>
             <div className="category-picker-top">
@@ -1455,13 +1454,13 @@ export default function Home() {
           )}
 
           {loading ? (
-            <div className="empty">Loading inventory...</div>
+            <EmptyState>Loading inventory...</EmptyState>
           ) : !hasSelectedInventoryView && !isAddingNew ? (
-            <div className="empty">Select a category above to start browsing inventory.</div>
+            <EmptyState>Select a category above to start browsing inventory.</EmptyState>
           ) : filteredItems.length === 0 && !isAddingNew ? (
-            <div className="empty">
+            <EmptyState>
               No items found in {selectedViewLabel || "this view"}. Try another category or refine your filters.
-            </div>
+            </EmptyState>
           ) : (
             <>
               {isAddingNew && inlineDraft && (
