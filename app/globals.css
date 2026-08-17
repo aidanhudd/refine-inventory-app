@@ -551,6 +551,7 @@ button:focus-visible {
   display: grid;
   grid-template-columns: repeat(var(--inventory-grid-cols), minmax(0, 1fr));
   gap: 12px;
+  align-items: start;
 }
 .inventory-item-grid-full {
   grid-column: 1 / -1;
@@ -647,6 +648,8 @@ button:focus-visible {
 .category-grid-card {
   display: flex;
   flex-direction: column;
+  align-self: start;
+  height: auto;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -665,6 +668,7 @@ button:focus-visible {
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
+  flex: 0 0 auto;
   padding: 0;
   border: none;
   background: color-mix(in srgb, var(--bg) 55%, var(--card));
