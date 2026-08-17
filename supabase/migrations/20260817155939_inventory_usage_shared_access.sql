@@ -1,20 +1,14 @@
--- PENDING Migration B: shared warehouse inventory_usage visibility and permissioned undo.
+-- Migration B: shared warehouse inventory_usage visibility and permissioned undo.
 --
--- This file is intentionally outside supabase/migrations so it is NOT applied by
--- `supabase db push` together with Migration A.
---
--- After the corrected application is deployed and own-user behavior is verified:
+-- Prerequisites (already completed before applying this file):
 --   1. Apply Migration A: supabase/migrations/20260817152650_customers_jobs_schema.sql
 --   2. Verify the old website still works.
 --   3. Deploy the corrected application.
 --   4. Verify customer/job creation and own usage undo.
---   5. Move/copy this file into supabase/migrations using a NEW later 14-digit UTC
---      timestamp, e.g. YYYYMMDDHHmmss_inventory_usage_shared_access.sql
---      (do not reuse 20260817152650).
---   6. Apply that new Migration B.
---   7. Verify shared visibility and undo permissions.
 --
--- Do not perform step 5 until steps 1–4 are complete.
+-- After applying this Migration B:
+--   5. Verify shared visibility and undo permissions
+--      (team SELECT; owner or manager/admin DELETE).
 
 alter table public.inventory_usage enable row level security;
 
