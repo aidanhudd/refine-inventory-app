@@ -351,6 +351,24 @@ button:focus-visible {
   background: color-mix(in srgb, var(--accent) 14%, var(--card));
   color: var(--text);
 }
+/* Jobs page: three tabs must fit ~320px; toggle takes width and buttons flex/wrap */
+.jobs-toolbar .toolbar-view-toggle {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 1;
+  overflow: visible;
+}
+.jobs-toolbar .toolbar-view-btn {
+  flex: 1 1 5.5rem;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: center;
+  padding: 8px 6px;
+}
 .category-view {
   display: flex;
   flex-direction: column;

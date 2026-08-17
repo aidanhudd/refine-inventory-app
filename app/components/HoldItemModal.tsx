@@ -6,7 +6,7 @@ import JobPicker from "./JobPicker"
 import NewCustomerForm from "./NewCustomerForm"
 import NewJobForm from "./NewJobForm"
 import {
-  filterJobsForCustomer,
+  fetchItemHoldFields,
   loadActiveJobsWithCustomers,
   loadCustomersOrdered,
   placeItemHoldRpc,
@@ -17,23 +17,32 @@ import {
   type JobWithCustomer,
 } from "../../lib/customersJobs"
 
+export type HoldPlacedResult =
+  | {
+      itemId: string
+      holdCustomerId: string | null
+      holdJobId: string | null
+      holdLastName: string | null
+      holdAt: string | null
+      refreshRequired?: false
+    }
+  | {
+      itemId: string
+      refreshRequired: true
+    }
+
 type HoldItemModalProps = {
   itemId: string
   itemName: string | null
   onClose: () => void
-  onPlaced: (payload: {
-    itemId: string
-    holdCustomerId: string
-    holdJobId: string | null
-    holdLastName: string
-    holdAt: string
-  }) => void
+  onPlaced: (result: HoldPlacedResult) => void
 }
 
 type FlowStep = "hold" | "new-job" | "new-customer"
 
 export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: HoldItemModalProps) {
   const [step, setStep] = useState<FlowStep>("hold")
+  const [customerReturnStep, setCustomerReturnStep] = useState<FlowStep>("hold")
   const [flowSession, setFlowSession] = useState(0)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [jobs, setJobs] = useState<JobWithCustomer[]>([])
@@ -74,10 +83,13 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
     setLoading(false)
   }
 
-  const jobsForCustomer = useMemo(() => {
+  const activeJobsForSelectedCustomer = useMemo(() => {
     if (!selectedCustomer) return []
-    return filterJobsForCustomer(jobs, selectedCustomer.id, jobQuery, 40)
-  }, [jobs, selectedCustomer, jobQuery])
+    return jobs.filter(
+      (job) =>
+        job.customer_id === selectedCustomer.id && (job.status || "").toLowerCase() === "active",
+    )
+  }, [jobs, selectedCustomer])
 
   const openNewJob = () => {
     if (!selectedCustomer) {
@@ -89,6 +101,27 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
     setShowCustomerResults(false)
     setFlowSession((v) => v + 1)
     setStep("new-job")
+  }
+
+  const openNewCustomer = (returnTo: FlowStep) => {
+    setFormError("")
+    setCustomerReturnStep(returnTo)
+    setStep("new-customer")
+  }
+
+  const applySelectedCustomer = (customer: Customer, nextStep: FlowStep) => {
+    setCustomers((prev) => {
+      if (prev.some((c) => c.id === customer.id)) return prev
+      return [...prev, customer].sort((a, b) => a.name.localeCompare(b.name))
+    })
+    setSelectedCustomer(customer)
+    setCustomerQuery(customer.name)
+    setShowCustomerResults(false)
+    if (nextStep === "hold") {
+      setSelectedJob(null)
+      setJobQuery("")
+    }
+    setStep(nextStep)
   }
 
   const handlePlaceHold = async () => {
@@ -108,22 +141,31 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
       return
     }
 
-    const holdLastName = selectedJob
-      ? formatJobWithCustomerLabel({ ...selectedJob, customer: selectedCustomer })
-      : selectedCustomer.name.trim()
+    const readback = await fetchItemHoldFields(id)
+    if (readback.error || !readback.data) {
+      onPlaced({ itemId: id, refreshRequired: true })
+      setSubmitting(false)
+      return
+    }
 
     onPlaced({
-      itemId: id,
-      holdCustomerId: selectedCustomer.id,
-      holdJobId: selectedJob?.id || null,
-      holdLastName,
-      holdAt: new Date().toISOString(),
+      itemId: readback.data.id,
+      holdCustomerId: readback.data.hold_customer_id,
+      holdJobId: readback.data.hold_job_id,
+      holdLastName: readback.data.hold_last_name,
+      holdAt: readback.data.hold_at,
     })
     setSubmitting(false)
   }
 
   const title =
     step === "hold" ? `Hold — ${itemName || "Item"}` : step === "new-job" ? "New Job" : "New Customer"
+
+  const jobEmptyMessage = !selectedCustomer
+    ? "Select a customer first."
+    : activeJobsForSelectedCustomer.length === 0
+      ? "No active jobs for this customer."
+      : "No jobs match your search."
 
   return (
     <div
@@ -147,7 +189,8 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
               disabled={submitting}
               onClick={() => {
                 setFormError("")
-                setStep(step === "new-customer" ? "new-job" : "hold")
+                if (step === "new-customer") setStep(customerReturnStep)
+                else setStep("hold")
               }}
             >
               ← Back
@@ -188,18 +231,14 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
               }}
               showResults={showCustomerResults}
               onShowResults={setShowCustomerResults}
-              onCreateNew={() => {
-                setFormError("")
-                setFlowSession((v) => v + 1)
-                setStep("new-customer")
-              }}
+              onCreateNew={() => openNewCustomer("hold")}
               disabled={submitting || loading}
             />
 
             <JobPicker
               id="hold-job-search"
               label="Job (optional)"
-              jobs={selectedCustomer ? jobs.filter((j) => j.customer_id === selectedCustomer.id) : []}
+              jobs={activeJobsForSelectedCustomer}
               query={jobQuery}
               onQueryChange={(value) => {
                 setJobQuery(value)
@@ -218,12 +257,10 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
               onCreateNew={selectedCustomer ? openNewJob : undefined}
               disabled={submitting || loading || !selectedCustomer}
               loading={loading}
-              emptyMessage={
-                selectedCustomer ? "No active jobs for this customer." : "Select a customer first."
-              }
+              emptyMessage={jobEmptyMessage}
             />
 
-            {jobsForCustomer.length === 0 && selectedCustomer && !loading && (
+            {selectedCustomer && !loading && activeJobsForSelectedCustomer.length === 0 && (
               <div className="small">No active jobs yet — you can create one or place a customer-only hold.</div>
             )}
 
@@ -279,10 +316,7 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
               setJobQuery(formatJobWithCustomerLabel(job))
               setStep("hold")
             }}
-            onRequestCreateCustomer={() => {
-              setFormError("")
-              setStep("new-customer")
-            }}
+            onRequestCreateCustomer={() => openNewCustomer("new-job")}
             onError={setFormError}
             submitLabel="Create Job"
           />
@@ -293,22 +327,9 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
             customers={customers}
             submitting={submitting}
             onSubmittingChange={setSubmitting}
-            onCancel={() => setStep("hold")}
-            onCreated={(customer) => {
-              setCustomers((prev) => [...prev, customer].sort((a, b) => a.name.localeCompare(b.name)))
-              setSelectedCustomer(customer)
-              setCustomerQuery(customer.name)
-              setShowCustomerResults(false)
-              setSelectedJob(null)
-              setJobQuery("")
-              setStep("hold")
-            }}
-            onSelectExisting={(customer) => {
-              setSelectedCustomer(customer)
-              setCustomerQuery(customer.name)
-              setShowCustomerResults(false)
-              setStep("hold")
-            }}
+            onCancel={() => setStep(customerReturnStep)}
+            onCreated={(customer) => applySelectedCustomer(customer, customerReturnStep)}
+            onSelectExisting={(customer) => applySelectedCustomer(customer, customerReturnStep)}
             onError={setFormError}
           />
         )}

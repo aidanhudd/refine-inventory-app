@@ -1723,22 +1723,29 @@ export default function Home() {
           itemId={selectedItem.id}
           itemName={selectedItem.product_name}
           onClose={() => setHoldModalOpen(false)}
-          onPlaced={({ itemId, holdCustomerId, holdJobId, holdLastName, holdAt }) => {
+          onPlaced={(result) => {
+            setHoldModalOpen(false)
+            if (result.refreshRequired) {
+              setMessage("Hold placed.")
+              void loadAll()
+              return
+            }
             setItems((prev) =>
               prev.map((inventoryItem) =>
-                inventoryItem.id === itemId
+                inventoryItem.id === result.itemId
                   ? {
                       ...inventoryItem,
-                      hold_customer_id: holdCustomerId,
-                      hold_job_id: holdJobId,
-                      hold_last_name: holdLastName,
-                      hold_at: holdAt,
+                      hold_customer_id: result.holdCustomerId,
+                      hold_job_id: result.holdJobId,
+                      hold_last_name: result.holdLastName,
+                      hold_at: result.holdAt,
                     }
                   : inventoryItem,
               ),
             )
-            setMessage(`Item placed on hold for ${holdLastName}.`)
-            setHoldModalOpen(false)
+            setMessage(
+              `Item placed on hold for ${result.holdLastName || "customer"}.`,
+            )
           }}
         />
       )}

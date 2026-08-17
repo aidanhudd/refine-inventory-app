@@ -1,10 +1,10 @@
 "use client"
 
 import { FormEvent, useMemo, useState } from "react"
+import NewCustomerForm from "./NewCustomerForm"
+import NewJobForm from "./NewJobForm"
 import {
   archiveCustomerRpc,
-  createCustomerRecord,
-  createJobRecord,
   deleteUnusedCustomerRpc,
   deleteUnusedJobRpc,
   reopenCustomerRpc,
@@ -13,6 +13,7 @@ import {
   updateJobStatusRecord,
 } from "../../lib/customerJobApi"
 import {
+  canEditCustomerOrJob,
   canManageCustomers,
   canManageJobStatus,
   formatJobWithCustomerLabel,
@@ -43,6 +44,7 @@ type CustomersJobsViewProps = {
   jobsById: Map<string, JobWithCustomer>
   usage: UsageRow[]
   items: Item[]
+  currentUserId: string | null | undefined
   role: string | null | undefined
   onCustomersChange: (customers: Customer[]) => void
   onJobUpsert: (job: JobWithCustomer) => void
@@ -51,11 +53,14 @@ type CustomersJobsViewProps = {
   onError: (message: string) => void
 }
 
+type CreatePanel = "none" | "customer" | "job" | "job-for"
+
 export default function CustomersJobsView({
   customers,
   jobsById,
   usage,
   items,
+  currentUserId,
   role,
   onCustomersChange,
   onJobUpsert,
@@ -71,8 +76,16 @@ export default function CustomersJobsView({
   const [expandedCustomerIds, setExpandedCustomerIds] = useState<Set<string>>(() => new Set())
   const [busyKey, setBusyKey] = useState<string | null>(null)
 
-  const [showAddCustomer, setShowAddCustomer] = useState(false)
-  const [showAddJobFor, setShowAddJobFor] = useState<string | null>(null)
+  const [createPanel, setCreatePanel] = useState<CreatePanel>("none")
+  const [createJobForCustomerId, setCreateJobForCustomerId] = useState<string | null>(null)
+  const [createFlowSession, setCreateFlowSession] = useState(0)
+  const [creatingCustomerFromJob, setCreatingCustomerFromJob] = useState(false)
+  const [createSubmitting, setCreateSubmitting] = useState(false)
+
+  const [selectedCreateCustomer, setSelectedCreateCustomer] = useState<Customer | null>(null)
+  const [createCustomerQuery, setCreateCustomerQuery] = useState("")
+  const [showCreateCustomerResults, setShowCreateCustomerResults] = useState(false)
+
   const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null)
   const [editingJobId, setEditingJobId] = useState<string | null>(null)
 
@@ -84,6 +97,8 @@ export default function CustomersJobsView({
     notes: "",
   })
   const [jobForm, setJobForm] = useState({ name: "", address: "", notes: "" })
+
+  const jobsList = useMemo(() => Array.from(jobsById.values()), [jobsById])
 
   const jobsByCustomer = useMemo(() => {
     const map = new Map<string, JobWithCustomer[]>()
@@ -119,6 +134,9 @@ export default function CustomersJobsView({
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [customers, includeArchived, search, jobsByCustomer])
 
+  const canEditRecord = (createdBy: string | null | undefined) =>
+    canEditCustomerOrJob({ createdBy, currentUserId, role })
+
   const toggleExpanded = (customerId: string) => {
     setExpandedCustomerIds((prev) => {
       const next = new Set(prev)
@@ -128,7 +146,47 @@ export default function CustomersJobsView({
     })
   }
 
+  const closeCreatePanels = () => {
+    setCreatePanel("none")
+    setCreateJobForCustomerId(null)
+    setCreatingCustomerFromJob(false)
+    setCreateSubmitting(false)
+    setSelectedCreateCustomer(null)
+    setCreateCustomerQuery("")
+    setShowCreateCustomerResults(false)
+  }
+
+  const startAddCustomer = () => {
+    closeCreatePanels()
+    setEditingCustomerId(null)
+    setEditingJobId(null)
+    setCreateFlowSession((v) => v + 1)
+    setCreatePanel("customer")
+  }
+
+  const startAddJob = () => {
+    closeCreatePanels()
+    setEditingCustomerId(null)
+    setEditingJobId(null)
+    setCreateFlowSession((v) => v + 1)
+    setCreatePanel("job")
+  }
+
+  const startAddJobFor = (customer: Customer) => {
+    closeCreatePanels()
+    setEditingCustomerId(null)
+    setEditingJobId(null)
+    setSelectedCreateCustomer(customer)
+    setCreateCustomerQuery(customer.name)
+    setCreateJobForCustomerId(customer.id)
+    setExpandedCustomerIds((prev) => new Set(prev).add(customer.id))
+    setCreateFlowSession((v) => v + 1)
+    setCreatePanel("job-for")
+  }
+
   const startEditCustomer = (customer: Customer) => {
+    if (!canEditRecord(customer.created_by)) return
+    closeCreatePanels()
     setEditingCustomerId(customer.id)
     setCustomerForm({
       name: customer.name,
@@ -137,81 +195,73 @@ export default function CustomersJobsView({
       address: customer.address || "",
       notes: customer.notes || "",
     })
-    setShowAddCustomer(false)
   }
 
-  const startAddCustomer = () => {
-    setShowAddCustomer(true)
-    setEditingCustomerId(null)
-    setCustomerForm({ name: "", phone: "", email: "", address: "", notes: "" })
+  const startEditJob = (job: JobWithCustomer) => {
+    if (!canEditRecord(job.created_by)) return
+    closeCreatePanels()
+    setEditingJobId(job.id)
+    setJobForm({
+      name: job.name,
+      address: job.address || "",
+      notes: job.notes || "",
+    })
   }
 
-  const saveCustomer = async (e: FormEvent, customerId?: string) => {
+  const saveCustomer = async (e: FormEvent, customerId: string) => {
     e.preventDefault()
     if (busyKey) return
+    const existing = customers.find((c) => c.id === customerId)
+    if (!existing || !canEditRecord(existing.created_by)) {
+      onError("You can only edit customers you created.")
+      return
+    }
     if (!customerForm.name.trim()) {
       onError("Customer name is required.")
       return
     }
-    setBusyKey(customerId ? `edit-customer-${customerId}` : "add-customer")
+    setBusyKey(`edit-customer-${customerId}`)
     onError("")
 
-    const result = customerId
-      ? await updateCustomerRecord(customerId, customerForm)
-      : await createCustomerRecord(customerForm)
-
+    const result = await updateCustomerRecord(customerId, customerForm)
     setBusyKey(null)
     if (result.error || !result.data) {
       onError(result.error || "Failed to save customer.")
       return
     }
 
-    if (customerId) {
-      onCustomersChange(customers.map((c) => (c.id === customerId ? result.data! : c)))
-      setEditingCustomerId(null)
-      onMessage("Customer updated.")
-    } else {
-      onCustomersChange([...customers, result.data].sort((a, b) => a.name.localeCompare(b.name)))
-      setShowAddCustomer(false)
-      setExpandedCustomerIds((prev) => new Set(prev).add(result.data!.id))
-      onMessage("Customer created.")
-    }
+    onCustomersChange(customers.map((c) => (c.id === customerId ? result.data! : c)))
+    setEditingCustomerId(null)
+    onMessage("Customer updated.")
   }
 
-  const saveJob = async (e: FormEvent, customerId: string, jobId?: string) => {
+  const saveJob = async (e: FormEvent, customerId: string, jobId: string) => {
     e.preventDefault()
     if (busyKey) return
+    const existing = jobsById.get(jobId)
+    if (!existing || !canEditRecord(existing.created_by)) {
+      onError("You can only edit jobs you created.")
+      return
+    }
     if (!jobForm.name.trim()) {
       onError("Job name is required.")
       return
     }
-    setBusyKey(jobId ? `edit-job-${jobId}` : `add-job-${customerId}`)
+    setBusyKey(`edit-job-${jobId}`)
     onError("")
 
-    if (jobId) {
-      const result = await updateJobRecord(jobId, jobForm)
-      setBusyKey(null)
-      if (result.error || !result.data) {
-        onError(result.error || "Failed to update job.")
-        return
-      }
-      const existing = jobsById.get(jobId)
-      onJobUpsert({ ...result.data, customer: existing?.customer || customers.find((c) => c.id === customerId) || null })
-      setEditingJobId(null)
-      onMessage("Job updated.")
-      return
-    }
-
-    const result = await createJobRecord({ customerId, ...jobForm })
+    const result = await updateJobRecord(jobId, jobForm)
     setBusyKey(null)
     if (result.error || !result.data) {
-      onError(result.error || "Failed to create job.")
+      onError(result.error || "Failed to update job.")
       return
     }
-    const customer = customers.find((c) => c.id === customerId) || null
-    onJobUpsert({ ...result.data, customer })
-    setShowAddJobFor(null)
-    onMessage("Job created.")
+    onJobUpsert({
+      ...result.data,
+      customer: existing.customer || customers.find((c) => c.id === customerId) || null,
+    })
+    setEditingJobId(null)
+    onMessage("Job updated.")
   }
 
   const runJobStatus = async (jobId: string, status: "active" | "completed" | "archived") => {
@@ -309,6 +359,76 @@ export default function CustomersJobsView({
 
   const usageForJob = (jobId: string) => usage.filter((u) => u.job_id === jobId)
 
+  const handleJobCreated = (job: JobWithCustomer) => {
+    onJobUpsert(job)
+    if (job.customer && !customers.some((c) => c.id === job.customer!.id)) {
+      onCustomersChange([...customers, job.customer].sort((a, b) => a.name.localeCompare(b.name)))
+    }
+    setExpandedCustomerIds((prev) => new Set(prev).add(job.customer_id))
+    closeCreatePanels()
+    onMessage("Job created.")
+  }
+
+  const showTopLevelJobCreate = createPanel === "job"
+  const activeCustomersForCreate = customers.filter((c) => isCustomerActive(c))
+
+  const renderJobCreateForm = (title: string) => (
+    <div className={createPanel === "job" ? "card jobs-group-card" : "customers-jobs-edit-form"}>
+      {createPanel === "job" && <h3>{title}</h3>}
+      {createPanel === "job-for" && <h4>{title}</h4>}
+      <NewJobForm
+        key={createFlowSession}
+        hidden={creatingCustomerFromJob}
+        customers={activeCustomersForCreate}
+        jobs={jobsList}
+        selectedCustomer={selectedCreateCustomer}
+        onSelectCustomer={setSelectedCreateCustomer}
+        customerQuery={createCustomerQuery}
+        onCustomerQueryChange={setCreateCustomerQuery}
+        showCustomerResults={showCreateCustomerResults}
+        onShowCustomerResults={setShowCreateCustomerResults}
+        submitting={createSubmitting}
+        onSubmittingChange={setCreateSubmitting}
+        onCancel={closeCreatePanels}
+        onCreated={handleJobCreated}
+        onSelectExistingJob={(job) => {
+          onJobUpsert(job)
+          setExpandedCustomerIds((prev) => new Set(prev).add(job.customer_id))
+          closeCreatePanels()
+          onMessage(`Selected existing job ${formatJobWithCustomerLabel(job)}.`)
+        }}
+        onRequestCreateCustomer={() => {
+          onError("")
+          setCreatingCustomerFromJob(true)
+        }}
+        onError={onError}
+        submitLabel="Create Job"
+      />
+      {creatingCustomerFromJob && (
+        <NewCustomerForm
+          customers={customers}
+          submitting={createSubmitting}
+          onSubmittingChange={setCreateSubmitting}
+          onCancel={() => setCreatingCustomerFromJob(false)}
+          onCreated={(customer) => {
+            onCustomersChange([...customers, customer].sort((a, b) => a.name.localeCompare(b.name)))
+            setSelectedCreateCustomer(customer)
+            setCreateCustomerQuery(customer.name)
+            setShowCreateCustomerResults(false)
+            setCreatingCustomerFromJob(false)
+          }}
+          onSelectExisting={(customer) => {
+            setSelectedCreateCustomer(customer)
+            setCreateCustomerQuery(customer.name)
+            setShowCreateCustomerResults(false)
+            setCreatingCustomerFromJob(false)
+          }}
+          onError={onError}
+        />
+      )}
+    </div>
+  )
+
   return (
     <div className="customers-jobs-view">
       <div className="jobs-toolbar">
@@ -321,6 +441,9 @@ export default function CustomersJobsView({
         <div className="customers-jobs-toolbar-actions">
           <button type="button" className="btn-secondary btn-small" onClick={startAddCustomer}>
             + Add Customer
+          </button>
+          <button type="button" className="btn-secondary btn-small" onClick={startAddJob}>
+            + Add Job
           </button>
         </div>
       </div>
@@ -344,20 +467,35 @@ export default function CustomersJobsView({
         </label>
       </div>
 
-      {showAddCustomer && (
-        <form className="card jobs-group-card" onSubmit={(e) => void saveCustomer(e)}>
+      {createPanel === "customer" && (
+        <div className="card jobs-group-card">
           <h3>New Customer</h3>
-          <CustomerFieldsForm form={customerForm} setForm={setCustomerForm} disabled={!!busyKey} />
-          <div className="modal-actions">
-            <button type="button" onClick={() => setShowAddCustomer(false)} disabled={!!busyKey}>
-              Cancel
-            </button>
-            <button type="submit" className="btn-primary" disabled={!!busyKey}>
-              {busyKey === "add-customer" ? "Saving…" : "Create"}
-            </button>
-          </div>
-        </form>
+          <NewCustomerForm
+            key={createFlowSession}
+            customers={customers}
+            submitting={createSubmitting}
+            onSubmittingChange={setCreateSubmitting}
+            onCancel={closeCreatePanels}
+            onCreated={(customer) => {
+              onCustomersChange([...customers, customer].sort((a, b) => a.name.localeCompare(b.name)))
+              setExpandedCustomerIds((prev) => new Set(prev).add(customer.id))
+              closeCreatePanels()
+              onMessage("Customer created.")
+            }}
+            onSelectExisting={(customer) => {
+              setExpandedCustomerIds((prev) => new Set(prev).add(customer.id))
+              closeCreatePanels()
+              onMessage(`Selected existing customer ${customer.name}.`)
+            }}
+            onError={onError}
+          />
+        </div>
       )}
+
+      {showTopLevelJobCreate &&
+        renderJobCreateForm(
+          selectedCreateCustomer ? `New Job for ${selectedCreateCustomer.name}` : "New Job",
+        )}
 
       {visibleCustomers.length === 0 ? (
         <div className="empty">No customers yet.</div>
@@ -369,6 +507,7 @@ export default function CustomersJobsView({
             return (job.status || "").toLowerCase() === "active"
           })
           const active = isCustomerActive(customer)
+          const canEditCustomer = canEditRecord(customer.created_by)
 
           return (
             <div key={customer.id} className="card jobs-group-card">
@@ -385,15 +524,17 @@ export default function CustomersJobsView({
                     {!active && <span className="badge">archived</span>}
                   </h3>
                 </button>
-                <div className="customers-jobs-header-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary btn-small"
-                    onClick={() => startEditCustomer(customer)}
-                  >
-                    Edit
-                  </button>
-                </div>
+                {canEditCustomer && (
+                  <div className="customers-jobs-header-actions">
+                    <button
+                      type="button"
+                      className="btn-secondary btn-small"
+                      onClick={() => startEditCustomer(customer)}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                )}
               </div>
 
               {(customer.phone || customer.email || customer.address) && (
@@ -402,7 +543,7 @@ export default function CustomersJobsView({
                 </div>
               )}
 
-              {editingCustomerId === customer.id && (
+              {editingCustomerId === customer.id && canEditCustomer && (
                 <form className="customers-jobs-edit-form" onSubmit={(e) => void saveCustomer(e, customer.id)}>
                   <CustomerFieldsForm form={customerForm} setForm={setCustomerForm} disabled={!!busyKey} />
                   <div className="modal-actions">
@@ -424,6 +565,7 @@ export default function CustomersJobsView({
                   ) : (
                     jobs.map((job) => {
                       const lines = usageForJob(job.id)
+                      const canEditJob = canEditRecord(job.created_by)
                       return (
                         <div key={job.id} className="customers-jobs-job-block">
                           <div className="jobs-line-row">
@@ -431,6 +573,16 @@ export default function CustomersJobsView({
                               • {job.name}{" "}
                               <span className="badge">{job.status}</span>
                             </div>
+                            {canEditJob && (
+                              <button
+                                type="button"
+                                className="btn-secondary btn-small jobs-undo-btn"
+                                disabled={!!busyKey}
+                                onClick={() => startEditJob(job)}
+                              >
+                                Edit
+                              </button>
+                            )}
                           </div>
 
                           {canManageJobs && (
@@ -464,22 +616,6 @@ export default function CustomersJobsView({
                                   Reopen
                                 </button>
                               )}
-                              <button
-                                type="button"
-                                className="btn-secondary btn-small"
-                                disabled={!!busyKey}
-                                onClick={() => {
-                                  setEditingJobId(job.id)
-                                  setJobForm({
-                                    name: job.name,
-                                    address: job.address || "",
-                                    notes: job.notes || "",
-                                  })
-                                  setShowAddJobFor(null)
-                                }}
-                              >
-                                Edit
-                              </button>
                               {canManage && (
                                 <button
                                   type="button"
@@ -493,7 +629,7 @@ export default function CustomersJobsView({
                             </div>
                           )}
 
-                          {editingJobId === job.id && (
+                          {editingJobId === job.id && canEditJob && (
                             <form
                               className="customers-jobs-edit-form"
                               onSubmit={(e) => void saveJob(e, customer.id, job.id)}
@@ -535,39 +671,19 @@ export default function CustomersJobsView({
                     })
                   )}
 
-                  {active && (
-                    <>
-                      {showAddJobFor === customer.id ? (
-                        <form
-                          className="customers-jobs-edit-form"
-                          onSubmit={(e) => void saveJob(e, customer.id)}
-                        >
-                          <h4>New Job for {customer.name}</h4>
-                          <JobFieldsForm form={jobForm} setForm={setJobForm} disabled={!!busyKey} />
-                          <div className="modal-actions">
-                            <button type="button" onClick={() => setShowAddJobFor(null)} disabled={!!busyKey}>
-                              Cancel
-                            </button>
-                            <button type="submit" className="btn-primary" disabled={!!busyKey}>
-                              Create job
-                            </button>
-                          </div>
-                        </form>
-                      ) : (
+                  {active && createPanel === "job-for" && createJobForCustomerId === customer.id
+                    ? renderJobCreateForm(`New Job for ${customer.name}`)
+                    : active
+                      ? (
                         <button
                           type="button"
                           className="btn-secondary btn-small"
-                          onClick={() => {
-                            setShowAddJobFor(customer.id)
-                            setJobForm({ name: "", address: "", notes: "" })
-                            setEditingJobId(null)
-                          }}
+                          onClick={() => startAddJobFor(customer)}
                         >
                           + Add Job for {customer.name}
                         </button>
-                      )}
-                    </>
-                  )}
+                      )
+                      : null}
 
                   {canManage && (
                     <div className="jobs-status-actions" style={{ marginTop: 12 }}>

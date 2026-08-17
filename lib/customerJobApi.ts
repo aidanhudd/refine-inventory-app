@@ -218,6 +218,29 @@ export function releaseItemHoldRpc(itemId: string) {
   return callUuidRpc("release_item_hold", { p_item_id: itemId })
 }
 
+export type ItemHoldFields = {
+  id: string
+  hold_customer_id: string | null
+  hold_job_id: string | null
+  hold_last_name: string | null
+  hold_at: string | null
+}
+
+export async function fetchItemHoldFields(
+  itemId: string,
+): Promise<{ data: ItemHoldFields | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from("inventory_items")
+    .select("id, hold_customer_id, hold_job_id, hold_last_name, hold_at")
+    .eq("id", itemId)
+    .single()
+
+  if (error || !data) {
+    return { data: null, error: formatPhase2Error(error?.message || "Failed to read hold fields.") }
+  }
+  return { data: data as ItemHoldFields, error: null }
+}
+
 export function filterCustomersByQuery(customers: Customer[], query: string, limit = 40): Customer[] {
   const q = query.trim().toLowerCase()
   if (!q) return customers.slice(0, limit)

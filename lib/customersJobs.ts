@@ -109,6 +109,18 @@ export function canManageCustomers(role: string | null | undefined): boolean {
   return role === "manager" || role === "admin"
 }
 
+/** Employees may edit records they created; managers/admins may edit all. */
+export function canEditCustomerOrJob(options: {
+  createdBy: string | null | undefined
+  currentUserId: string | null | undefined
+  role: string | null | undefined
+}): boolean {
+  if (canManageCustomers(options.role)) return true
+  const { createdBy, currentUserId } = options
+  if (!createdBy || !currentUserId) return false
+  return createdBy === currentUserId
+}
+
 export function canUndoSharedUsage(options: {
   usageUserId: string | null | undefined
   currentUserId: string | null | undefined

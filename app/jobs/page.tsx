@@ -434,8 +434,21 @@ export default function JobsPage() {
           jobsById={jobsById}
           usage={usage}
           items={items}
+          currentUserId={user?.id}
           role={profile?.role}
-          onCustomersChange={setCustomers}
+          onCustomersChange={(nextCustomers) => {
+            setCustomers(nextCustomers)
+            const byId = new Map(nextCustomers.map((customer) => [customer.id, customer]))
+            setJobsById((prev) => {
+              const next = new Map(prev)
+              next.forEach((job, jobId) => {
+                const customer = byId.get(job.customer_id)
+                if (!customer) return
+                next.set(jobId, { ...job, customer })
+              })
+              return next
+            })
+          }}
           onJobUpsert={(job) => {
             setJobsById((prev) => {
               const next = new Map(prev)
