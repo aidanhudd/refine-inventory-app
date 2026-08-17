@@ -100,39 +100,55 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   const { user, profile, loading: authLoading } = useAuth()
   const [runtime, setRuntime] = useState<AppearanceRuntimeState>(DEFAULT_RUNTIME_STATE)
   const requestIdRef = useRef(0)
+  /** Identity that has already reached a terminal load result (skip refresh flashes). */
+  const settledIdentityRef = useRef<string | null>(null)
+
+  const userId = user?.id ?? null
+  const canAccess = hasAppAccess(profile)
+  const identityKey = userId && canAccess ? userId : null
 
   useEffect(() => {
+    // Wait for auth/profile readiness. A cancelled in-flight load will retry when
+    // this becomes false again because settledIdentityRef is only set on completion.
     if (authLoading) return
+
+    if (!identityKey) {
+      requestIdRef.current += 1
+      settledIdentityRef.current = null
+      setRuntime(defaultsState("idle"))
+      return
+    }
+
+    // Same approved user already settled — ignore token/profile object refreshes.
+    if (settledIdentityRef.current === identityKey) {
+      return
+    }
 
     const requestId = ++requestIdRef.current
     let cancelled = false
 
-    if (!user || !hasAppAccess(profile)) {
-      setRuntime(defaultsState("idle"))
-      return () => {
-        cancelled = true
-      }
-    }
-
-    // Defaults stay active while loading — never block on a prior user's config.
+    // New identity or retry after cancel: start from compiled defaults while loading.
     setRuntime(defaultsState("loading"))
 
     void fetchPublishedAppearance().then((result) => {
       if (cancelled || requestId !== requestIdRef.current) return
 
       if (result.status === "missing") {
+        settledIdentityRef.current = identityKey
         setRuntime(defaultsState("missing"))
         return
       }
 
       if (result.status === "timeout") {
         console.warn("[Appearance] published load timed out:", result.message)
+        settledIdentityRef.current = identityKey
         setRuntime(defaultsState("error", "timeout"))
         return
       }
 
       if (result.status === "error") {
         console.warn("[Appearance] published load failed:", result.message)
+        settledIdentityRef.current = identityKey
         setRuntime(defaultsState("error", "rpc_error"))
         return
       }
@@ -143,6 +159,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
           "[Appearance] published config rejected; using compiled defaults:",
           resolved.fallbackReason,
         )
+        settledIdentityRef.current = identityKey
         setRuntime({
           ...defaultsState("error", resolved.fallbackReason),
           publishedVersionId: result.row.versionId,
@@ -152,6 +169,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      settledIdentityRef.current = identityKey
       setRuntime({
         config: resolved.config,
         source: "published",
@@ -168,7 +186,7 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [authLoading, user, profile])
+  }, [authLoading, identityKey])
 
   useEffect(() => {
     const root = document.documentElement

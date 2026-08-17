@@ -24,7 +24,8 @@ type PublishedAppearanceRpcRow = {
 
 function parseBigInt(value: unknown): bigint | null {
   if (typeof value === "bigint") return value
-  if (typeof value === "number" && Number.isFinite(value) && Number.isInteger(value)) {
+  // Only accept numbers that survived JSON without losing integer precision.
+  if (typeof value === "number" && Number.isSafeInteger(value)) {
     return BigInt(value)
   }
   if (typeof value === "string" && /^-?\d+$/.test(value.trim())) {
