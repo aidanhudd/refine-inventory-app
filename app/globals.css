@@ -551,7 +551,7 @@ button:focus-visible {
   display: grid;
   grid-template-columns: repeat(var(--inventory-grid-cols), minmax(0, 1fr));
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 .inventory-item-grid-full {
   grid-column: 1 / -1;
@@ -648,8 +648,7 @@ button:focus-visible {
 .category-grid-card {
   display: flex;
   flex-direction: column;
-  align-self: start;
-  height: auto;
+  height: 100%;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: 14px;
@@ -663,12 +662,19 @@ button:focus-visible {
   border-color: #d0d5dd;
   transform: translateY(-1px);
 }
+/*
+ * Lock photo area to width-driven 4:3. Absolute media prevents intrinsic image
+ * height from expanding the wrapper (the usual cause of one taller photo).
+ */
 .category-grid-card-photo-wrap {
   position: relative;
   display: block;
   width: 100%;
   aspect-ratio: 4 / 3;
   flex: 0 0 auto;
+  flex-grow: 0;
+  flex-shrink: 0;
+  overflow: hidden;
   padding: 0;
   border: none;
   background: color-mix(in srgb, var(--bg) 55%, var(--card));
@@ -678,12 +684,16 @@ button:focus-visible {
   cursor: default;
 }
 .category-grid-card-photo {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 .category-grid-card-photo-empty {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -706,9 +716,11 @@ button:focus-visible {
 .category-grid-card-body {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   gap: 8px;
   padding: 10px 12px 12px;
   min-width: 0;
+  min-height: 0;
 }
 .category-grid-card-name {
   margin: 0;
@@ -716,6 +728,7 @@ button:focus-visible {
   font-weight: 700;
   line-height: 1.25;
   letter-spacing: -0.01em;
+  min-height: calc(1.25em * 2);
   overflow: hidden;
   text-overflow: ellipsis;
   display: -webkit-box;
@@ -726,6 +739,7 @@ button:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+  min-height: 22px;
 }
 .category-grid-card-badges .badge {
   font-size: 11px;
@@ -770,7 +784,7 @@ button:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 2px;
+  margin-top: auto;
   overflow: visible;
 }
 .category-grid-card-actions .btn-small {
