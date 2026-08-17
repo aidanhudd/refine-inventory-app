@@ -2,14 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react"
 import { supabase } from "../../lib/supabaseClient"
-import { isItemOnHold } from "../../lib/itemHold"
+import { holdJobSublabel, isItemOnHold } from "../../lib/itemHold"
 import ItemHoldStatus from "../components/ItemHoldStatus"
+import CustomersJobsView from "../components/CustomersJobsView"
 import { useHidePrices } from "../components/HidePricesProvider"
 import { useAuth } from "../components/AuthProvider"
+import {
+  CUSTOMER_SELECT,
+  loadCustomersOrdered,
+  mapJobsWithCustomer,
+  releaseItemHoldRpc,
+  updateJobStatusRecord,
+  JOB_SELECT,
+} from "../../lib/customerJobApi"
 import {
   canManageJobStatus,
   canUndoSharedUsage,
   formatJobWithCustomerLabel,
+  formatPhase2Error,
   resolveUsageJobLabel,
   type Customer,
   type Job,
@@ -34,15 +44,19 @@ type Item = {
   unit_cost: number | null
   hold_last_name: string | null
   hold_at: string | null
+  hold_customer_id: string | null
+  hold_job_id: string | null
   warehouse_location: string | null
 }
 
-type JobsViewMode = "usage" | "holds"
+type JobsViewMode = "usage" | "holds" | "customers"
 
-const CUSTOMER_SELECT =
-  "id, name, phone, email, address, notes, created_by, created_at, updated_at"
-const JOB_SELECT =
-  "id, customer_id, name, address, notes, status, created_by, created_at, updated_at, completed_at"
+type HoldGroup = {
+  key: string
+  label: string
+  structured: boolean
+  items: Item[]
+}
 
 export default function JobsPage() {
   const { hidePrices } = useHidePrices()
@@ -50,6 +64,7 @@ export default function JobsPage() {
   const [viewMode, setViewMode] = useState<JobsViewMode>("usage")
   const [usage, setUsage] = useState<UsageRow[]>([])
   const [items, setItems] = useState<Item[]>([])
+  const [customers, setCustomers] = useState<Customer[]>([])
   const [jobsById, setJobsById] = useState<Map<string, JobWithCustomer>>(new Map())
   const [search, setSearch] = useState("")
   const [includeCompletedJobs, setIncludeCompletedJobs] = useState(false)
@@ -64,41 +79,47 @@ export default function JobsPage() {
   }, [])
 
   const loadData = async () => {
-    const [usageRes, itemsRes, jobsRes] = await Promise.all([
+    const [usageRes, itemsRes, jobsRes, customersRes] = await Promise.all([
       supabase.from("inventory_usage").select("*").order("used_at", { ascending: false }),
       supabase.from("inventory_items").select("*"),
       supabase
         .from("jobs")
         .select(`${JOB_SELECT}, customer:customers(${CUSTOMER_SELECT})`)
         .order("name", { ascending: true }),
+      loadCustomersOrdered(),
     ])
 
     if (usageRes.error) {
       console.error("[Jobs] inventory_usage load failed:", usageRes.error)
-      setErrorMessage(usageRes.error.message)
+      setErrorMessage(formatPhase2Error(usageRes.error.message))
     }
     if (itemsRes.error) {
       console.error("[Jobs] inventory_items load failed:", itemsRes.error)
-      setErrorMessage(itemsRes.error.message)
+      setErrorMessage(formatPhase2Error(itemsRes.error.message))
     }
     if (jobsRes.error) {
       console.error("[Jobs] jobs load failed:", jobsRes.error)
-      // Keep page usable for legacy usage even if jobs table is not migrated yet.
-      if (!usageRes.error) {
-        setErrorMessage(jobsRes.error.message)
-      }
+      if (!usageRes.error) setErrorMessage(formatPhase2Error(jobsRes.error.message))
+    }
+    if (customersRes.error) {
+      console.error("[Jobs] customers load failed:", customersRes.error)
+      setErrorMessage(customersRes.error)
     }
 
     setUsage((usageRes.data as UsageRow[]) || [])
-    setItems((itemsRes.data as Item[]) || [])
+    setItems(
+      ((itemsRes.data as Item[]) || []).map((item) => ({
+        ...item,
+        hold_customer_id: item.hold_customer_id ?? null,
+        hold_job_id: item.hold_job_id ?? null,
+      })),
+    )
+    setCustomers(customersRes.data)
 
     const nextJobs = new Map<string, JobWithCustomer>()
-    ;((jobsRes.data as Array<Job & { customer: Customer | Customer[] | null }>) || []).forEach((row) => {
-      nextJobs.set(row.id, {
-        ...row,
-        customer: Array.isArray(row.customer) ? row.customer[0] || null : row.customer,
-      })
-    })
+    mapJobsWithCustomer(
+      (jobsRes.data as Array<Job & { customer: Customer | Customer[] | null }>) || [],
+    ).forEach((job) => nextJobs.set(job.id, job))
     setJobsById(nextJobs)
   }
 
@@ -129,7 +150,7 @@ export default function JobsPage() {
       .select("id, item_id, quantity_used")
 
     if (deleteError) {
-      setErrorMessage(deleteError.message)
+      setErrorMessage(formatPhase2Error(deleteError.message))
       setUndoingUsageId(null)
       return
     }
@@ -159,7 +180,7 @@ export default function JobsPage() {
       .eq("id", restoredItemId)
 
     if (updateError) {
-      setErrorMessage(updateError.message)
+      setErrorMessage(formatPhase2Error(updateError.message))
       setUndoingUsageId(null)
       return
     }
@@ -184,16 +205,9 @@ export default function JobsPage() {
     setErrorMessage("")
     setMessage("")
 
-    const { error } = await supabase
-      .from("inventory_items")
-      .update({
-        hold_last_name: null,
-        hold_at: null,
-      })
-      .eq("id", item.id)
-
-    if (error) {
-      setErrorMessage(error.message)
+    const { id, error } = await releaseItemHoldRpc(item.id)
+    if (error || !id) {
+      setErrorMessage(error || "Failed to release hold.")
       setReleasingHoldItemId(null)
       return
     }
@@ -201,7 +215,13 @@ export default function JobsPage() {
     setItems((prev) =>
       prev.map((inventoryItem) =>
         inventoryItem.id === item.id
-          ? { ...inventoryItem, hold_last_name: null, hold_at: null }
+          ? {
+              ...inventoryItem,
+              hold_last_name: null,
+              hold_at: null,
+              hold_customer_id: null,
+              hold_job_id: null,
+            }
           : inventoryItem,
       ),
     )
@@ -219,28 +239,16 @@ export default function JobsPage() {
     setErrorMessage("")
     setMessage("")
 
-    const { data, error } = await supabase
-      .from("jobs")
-      .update({ status })
-      .eq("id", jobId)
-      .select(`${JOB_SELECT}, customer:customers(${CUSTOMER_SELECT})`)
-      .single()
-
-    if (error || !data) {
-      setErrorMessage(error?.message || "Failed to update job status.")
+    const result = await updateJobStatusRecord(jobId, status)
+    if (result.error || !result.data) {
+      setErrorMessage(result.error || "Failed to update job status.")
       setUpdatingJobId(null)
       return
     }
 
-    const row = data as Job & { customer: Customer | Customer[] | null }
-    const updated: JobWithCustomer = {
-      ...row,
-      customer: Array.isArray(row.customer) ? row.customer[0] || null : row.customer,
-    }
-
     setJobsById((prev) => {
       const next = new Map(prev)
-      next.set(jobId, updated)
+      next.set(jobId, result.data!)
       return next
     })
     setMessage(`Job marked ${status}.`)
@@ -258,7 +266,6 @@ export default function JobsPage() {
       }
     > = {}
 
-    // Seed structured jobs so zero-usage jobs still appear for status management.
     jobsById.forEach((job) => {
       const key = `job:${job.id}`
       grouped[key] = {
@@ -285,7 +292,6 @@ export default function JobsPage() {
           entries: [],
         }
       } else if (u.job_id && jobsById.has(u.job_id)) {
-        // Prefer live structured label when available.
         grouped[key].label = formatJobWithCustomerLabel(jobsById.get(u.job_id)!)
         grouped[key].jobStatus = jobsById.get(u.job_id)?.status || null
       }
@@ -297,8 +303,6 @@ export default function JobsPage() {
     return Object.values(grouped)
       .filter((group) => {
         if (!includeCompletedJobs && group.jobStatus && group.jobStatus !== "active") {
-          // Still show legacy groups (no structured status).
-          // Hide completed/archived structured jobs unless toggled on.
           if (group.jobId) return false
         }
         if (!query) return true
@@ -314,49 +318,76 @@ export default function JobsPage() {
   }, [usage, search, jobsById, includeCompletedJobs])
 
   const holdGroups = useMemo(() => {
-    const grouped: Record<string, Item[]> = {}
+    const customersById = new Map(customers.map((c) => [c.id, c]))
+    const grouped = new Map<string, HoldGroup>()
     const query = search.trim().toLowerCase()
 
     items
-      .filter((item) => isItemOnHold(item.hold_last_name))
+      .filter((item) => isItemOnHold(item.hold_last_name, item.hold_customer_id, item.hold_job_id))
       .forEach((item) => {
-        const key = item.hold_last_name!.trim()
-        if (!grouped[key]) grouped[key] = []
-        grouped[key].push(item)
+        if (item.hold_customer_id) {
+          const customer = customersById.get(item.hold_customer_id)
+          const label = customer?.name || (item.hold_last_name || "").split(" — ")[0] || "Customer"
+          const key = `customer:${item.hold_customer_id}`
+          const existing = grouped.get(key)
+          if (existing) existing.items.push(item)
+          else grouped.set(key, { key, label, structured: true, items: [item] })
+        } else {
+          const label = (item.hold_last_name || "On hold").trim()
+          const key = `legacy:${label.toLowerCase()}`
+          const existing = grouped.get(key)
+          if (existing) existing.items.push(item)
+          else grouped.set(key, { key, label, structured: false, items: [item] })
+        }
       })
 
-    return Object.entries(grouped)
-      .filter(([lastName, heldItems]) => {
+    return Array.from(grouped.values())
+      .filter((group) => {
         if (!query) return true
-        if (lastName.toLowerCase().includes(query)) return true
-        return heldItems.some((item) => (item.product_name || "").toLowerCase().includes(query))
+        if (group.label.toLowerCase().includes(query)) return true
+        return group.items.some((item) => {
+          if ((item.product_name || "").toLowerCase().includes(query)) return true
+          if ((item.hold_last_name || "").toLowerCase().includes(query)) return true
+          const job = item.hold_job_id ? jobsById.get(item.hold_job_id) : null
+          return !!(job && job.name.toLowerCase().includes(query))
+        })
       })
-      .sort((a, b) => a[0].localeCompare(b[0]))
-  }, [items, search])
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [items, search, customers, jobsById])
 
   const searchPlaceholder =
-    viewMode === "usage" ? "Search customers or jobs..." : "Search holds by last name or item..."
+    viewMode === "usage"
+      ? "Search customers or jobs..."
+      : viewMode === "holds"
+        ? "Search holds by customer, job, or item..."
+        : "Search customers or jobs..."
+
   const canManageJobs = canManageJobStatus(profile?.role)
+
+  const subtext =
+    viewMode === "usage"
+      ? "Review material assigned to jobs from inventory usage across the warehouse team."
+      : viewMode === "holds"
+        ? "Review inventory currently on hold for customers."
+        : "Manage customers and jobs, including archive, reopen, and unused deletion."
 
   return (
     <main>
       <h1>Jobs & Holds</h1>
-      <p className="subtext section-gap">
-        {viewMode === "usage"
-          ? "Review material assigned to jobs from inventory usage across the warehouse team."
-          : "Review inventory currently on hold for customers."}
-      </p>
+      <p className="subtext section-gap">{subtext}</p>
 
       {message && <div className="success page-feedback">{message}</div>}
       {errorMessage && <div className="notice page-feedback">{errorMessage}</div>}
 
       <div className="jobs-toolbar">
-        <input
-          className="search jobs-search"
-          placeholder={searchPlaceholder}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        {viewMode !== "customers" && (
+          <input
+            className="search jobs-search"
+            placeholder={searchPlaceholder}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        )}
 
         <div className="toolbar-view-toggle" role="group" aria-label="Jobs page view">
           <button
@@ -375,6 +406,14 @@ export default function JobsPage() {
           >
             On Hold
           </button>
+          <button
+            type="button"
+            className={`toolbar-view-btn ${viewMode === "customers" ? "toolbar-view-btn-active" : ""}`}
+            onClick={() => setViewMode("customers")}
+            aria-pressed={viewMode === "customers"}
+          >
+            Customers & Jobs
+          </button>
         </div>
       </div>
 
@@ -389,7 +428,32 @@ export default function JobsPage() {
         </label>
       )}
 
-      {viewMode === "usage" ? (
+      {viewMode === "customers" ? (
+        <CustomersJobsView
+          customers={customers}
+          jobsById={jobsById}
+          usage={usage}
+          items={items}
+          role={profile?.role}
+          onCustomersChange={setCustomers}
+          onJobUpsert={(job) => {
+            setJobsById((prev) => {
+              const next = new Map(prev)
+              next.set(job.id, job)
+              return next
+            })
+          }}
+          onJobRemove={(jobId) => {
+            setJobsById((prev) => {
+              const next = new Map(prev)
+              next.delete(jobId)
+              return next
+            })
+          }}
+          onMessage={setMessage}
+          onError={setErrorMessage}
+        />
+      ) : viewMode === "usage" ? (
         jobGroups.length === 0 ? (
           <div className="empty">No jobs or usage yet.</div>
         ) : (
@@ -454,9 +518,7 @@ export default function JobsPage() {
                       role: profile?.role,
                     })
 
-                    if (!hidePrices) {
-                      total += value
-                    }
+                    if (!hidePrices) total += value
 
                     return (
                       <div key={u.id} className="jobs-line-row">
@@ -496,23 +558,28 @@ export default function JobsPage() {
       ) : holdGroups.length === 0 ? (
         <div className="empty">No items on hold.</div>
       ) : (
-        holdGroups.map(([lastName, heldItems]) => (
-          <div key={lastName} className="card jobs-group-card">
+        holdGroups.map((group) => (
+          <div key={group.key} className="card jobs-group-card">
             <div className="jobs-group-header">
-              <h3>{lastName}</h3>
-              <ItemHoldStatus holdLastName={lastName} compact />
+              <h3>{group.label}</h3>
+              <ItemHoldStatus holdLastName={group.label} compact />
             </div>
 
-            {heldItems.map((item) => {
+            {group.items.map((item) => {
               const cost = Number(item.unit_cost || 0)
               const qty = Number(item.quantity_on_hand || 0)
               const value = cost * qty
               const isReleasing = releasingHoldItemId === item.id
+              const job = item.hold_job_id ? jobsById.get(item.hold_job_id) : null
+              const sublabel = group.structured
+                ? holdJobSublabel({ holdLastName: item.hold_last_name, jobName: job?.name })
+                : null
 
               return (
                 <div key={item.id} className="jobs-line-row">
                   <div className="jobs-line">
                     • {item.product_name || "Item"} — {qty} {item.quantity_type || ""}
+                    {sublabel && <span className="jobs-line-meta"> — {sublabel}</span>}
                     {!hidePrices && <> — ${value.toFixed(0)}</>}
                     {item.warehouse_location && (
                       <span className="jobs-line-meta"> — {item.warehouse_location}</span>

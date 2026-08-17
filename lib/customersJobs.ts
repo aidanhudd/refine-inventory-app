@@ -1,5 +1,7 @@
-export const JOB_STATUSES = ["active", "completed", "archived"] as const
+export const CUSTOMER_STATUSES = ["active", "archived"] as const
+export type CustomerStatus = (typeof CUSTOMER_STATUSES)[number]
 
+export const JOB_STATUSES = ["active", "completed", "archived"] as const
 export type JobStatus = (typeof JOB_STATUSES)[number]
 
 export type Customer = {
@@ -9,6 +11,8 @@ export type Customer = {
   email: string | null
   address: string | null
   notes: string | null
+  status?: CustomerStatus | string | null
+  archived_at?: string | null
   created_by: string
   created_at: string | null
   updated_at: string | null
@@ -93,7 +97,15 @@ export function findSimilarJobsForCustomer(jobs: Job[], customerId: string, name
   })
 }
 
+export function isCustomerActive(customer: Pick<Customer, "status"> | null | undefined): boolean {
+  return (customer?.status || "active").toLowerCase() === "active"
+}
+
 export function canManageJobStatus(role: string | null | undefined): boolean {
+  return role === "manager" || role === "admin"
+}
+
+export function canManageCustomers(role: string | null | undefined): boolean {
   return role === "manager" || role === "admin"
 }
 
@@ -106,4 +118,49 @@ export function canUndoSharedUsage(options: {
   if (!currentUserId) return false
   if (usageUserId && usageUserId === currentUserId) return true
   return role === "manager" || role === "admin"
+}
+
+/** Parse PHASE2:<CODE>:<message> (and common PostgREST wrappers). */
+export function parsePhase2Error(message: string | null | undefined): {
+  code: string | null
+  detail: string
+} {
+  const raw = (message || "").trim()
+  if (!raw) return { code: null, detail: "Something went wrong." }
+
+  const match = raw.match(/PHASE2:([A-Z0-9_]+):([\s\S]+)$/)
+  if (match) {
+    return { code: match[1], detail: match[2].trim() }
+  }
+  return { code: null, detail: raw }
+}
+
+const PHASE2_FRIENDLY: Record<string, string> = {
+  FORBIDDEN: "You do not have permission to do that.",
+  CUSTOMER_STATUS_FORBIDDEN: "Only managers and admins can archive or reopen customers.",
+  CUSTOMER_NOT_FOUND: "Customer was not found.",
+  CUSTOMER_ARCHIVED: "That customer is archived. Reopen the customer first.",
+  CUSTOMER_ALREADY_ARCHIVED: "That customer is already archived.",
+  CUSTOMER_ALREADY_ACTIVE: "That customer is already active.",
+  CUSTOMER_HAS_ACTIVE_JOBS: "Archive blocked: complete or archive active jobs first.",
+  CUSTOMER_HAS_STRUCTURED_HOLDS: "Blocked: release structured holds for this customer first.",
+  CUSTOMER_HAS_JOBS: "Delete blocked: this customer still has jobs. Archive instead.",
+  JOB_NOT_FOUND: "Job was not found.",
+  JOB_NOT_ACTIVE: "That job is not active.",
+  JOB_HAS_USAGE: "Delete blocked: this job has usage history. Archive instead.",
+  JOB_HAS_STRUCTURED_HOLDS: "Delete blocked: release structured holds on this job first.",
+  HOLD_CUSTOMER_REQUIRED: "Select a customer for the hold.",
+  HOLD_JOB_WITHOUT_CUSTOMER: "A job hold also requires a customer.",
+  HOLD_JOB_CUSTOMER_MISMATCH: "That job does not belong to the selected customer.",
+  HOLD_INCOMPLETE: "Hold data was incomplete. Try again.",
+  ITEM_NOT_FOUND: "Inventory item was not found.",
+  ITEM_ALREADY_HELD: "This item is already on hold. Release it first.",
+  ITEM_NOT_HELD: "This item is not currently on hold.",
+}
+
+export function formatPhase2Error(message: string | null | undefined): string {
+  const { code, detail } = parsePhase2Error(message)
+  if (code && PHASE2_FRIENDLY[code]) return PHASE2_FRIENDLY[code]
+  if (code) return detail || PHASE2_FRIENDLY.FORBIDDEN
+  return detail
 }

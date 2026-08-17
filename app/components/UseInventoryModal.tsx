@@ -49,7 +49,7 @@ export default function UseInventoryModal({ itemName, onClose, onConfirm }: UseI
     setLoadError("")
 
     const [customersRes, jobsRes] = await Promise.all([
-      loadCustomersOrdered(),
+      loadCustomersOrdered({ activeOnly: true }),
       loadActiveJobsWithCustomers(),
     ])
 

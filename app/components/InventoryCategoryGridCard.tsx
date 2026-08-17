@@ -50,7 +50,7 @@ export default function InventoryCategoryGridCard({
   const statusLabel = (item.status || "active").replace(/_/g, " ")
   const qty = Number(item.quantity_on_hand || 0)
   const unitCost = Number(item.unit_cost || 0)
-  const itemOnHold = isItemOnHold(item.hold_last_name)
+  const itemOnHold = isItemOnHold(item.hold_last_name, item.hold_customer_id, item.hold_job_id)
 
   const handleCardKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key === "Enter" || e.key === " ") {

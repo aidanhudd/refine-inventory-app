@@ -24,6 +24,8 @@ export type InventoryItemCardItem = {
   status: string | null
   hold_last_name: string | null
   hold_at: string | null
+  hold_customer_id?: string | null
+  hold_job_id?: string | null
   created_at: string | null
   length_inches: number | null
   width_inches: number | null
@@ -133,7 +135,7 @@ export default function InventoryItemCard({
     isInlineEditing && inlineDraft
       ? subcategories.filter((sub) => sub.category_id === inlineDraft.category_id)
       : []
-  const itemOnHold = isItemOnHold(item.hold_last_name)
+  const itemOnHold = isItemOnHold(item.hold_last_name, item.hold_customer_id, item.hold_job_id)
 
   return (
     <div className="item-card">

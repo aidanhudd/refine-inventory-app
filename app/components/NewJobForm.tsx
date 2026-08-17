@@ -27,6 +27,8 @@ type NewJobFormProps = {
   onRequestCreateCustomer: () => void
   onError: (message: string) => void
   hidden?: boolean
+  submitLabel?: string
+  submittingLabel?: string
 }
 
 export default function NewJobForm({
@@ -46,6 +48,8 @@ export default function NewJobForm({
   onRequestCreateCustomer,
   onError,
   hidden = false,
+  submitLabel = "Create & Use",
+  submittingLabel = "Creating…",
 }: NewJobFormProps) {
   const [jobName, setJobName] = useState("")
   const [jobAddress, setJobAddress] = useState("")
@@ -212,7 +216,7 @@ export default function NewJobForm({
           Cancel
         </button>
         <button type="submit" className="btn-primary" disabled={submitting}>
-          {submitting ? "Creating…" : "Create & Use"}
+          {submitting ? submittingLabel : submitLabel}
         </button>
       </div>
     </form>

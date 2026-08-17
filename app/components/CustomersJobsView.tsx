@@ -1,0 +1,702 @@
+"use client"
+
+import { FormEvent, useMemo, useState } from "react"
+import {
+  archiveCustomerRpc,
+  createCustomerRecord,
+  createJobRecord,
+  deleteUnusedCustomerRpc,
+  deleteUnusedJobRpc,
+  reopenCustomerRpc,
+  updateCustomerRecord,
+  updateJobRecord,
+  updateJobStatusRecord,
+} from "../../lib/customerJobApi"
+import {
+  canManageCustomers,
+  canManageJobStatus,
+  formatJobWithCustomerLabel,
+  isCustomerActive,
+  type Customer,
+  type JobWithCustomer,
+} from "../../lib/customersJobs"
+
+type UsageRow = {
+  id: string
+  item_id: string
+  job_id: string | null
+  job_name: string | null
+  quantity_used: number | null
+  used_at: string | null
+}
+
+type Item = {
+  id: string
+  product_name: string | null
+  quantity_type: string | null
+  hold_last_name: string | null
+  hold_customer_id?: string | null
+}
+
+type CustomersJobsViewProps = {
+  customers: Customer[]
+  jobsById: Map<string, JobWithCustomer>
+  usage: UsageRow[]
+  items: Item[]
+  role: string | null | undefined
+  onCustomersChange: (customers: Customer[]) => void
+  onJobUpsert: (job: JobWithCustomer) => void
+  onJobRemove: (jobId: string) => void
+  onMessage: (message: string) => void
+  onError: (message: string) => void
+}
+
+export default function CustomersJobsView({
+  customers,
+  jobsById,
+  usage,
+  items,
+  role,
+  onCustomersChange,
+  onJobUpsert,
+  onJobRemove,
+  onMessage,
+  onError,
+}: CustomersJobsViewProps) {
+  const canManage = canManageCustomers(role)
+  const canManageJobs = canManageJobStatus(role)
+  const [search, setSearch] = useState("")
+  const [includeArchived, setIncludeArchived] = useState(false)
+  const [includeCompletedJobs, setIncludeCompletedJobs] = useState(false)
+  const [expandedCustomerIds, setExpandedCustomerIds] = useState<Set<string>>(() => new Set())
+  const [busyKey, setBusyKey] = useState<string | null>(null)
+
+  const [showAddCustomer, setShowAddCustomer] = useState(false)
+  const [showAddJobFor, setShowAddJobFor] = useState<string | null>(null)
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null)
+  const [editingJobId, setEditingJobId] = useState<string | null>(null)
+
+  const [customerForm, setCustomerForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    address: "",
+    notes: "",
+  })
+  const [jobForm, setJobForm] = useState({ name: "", address: "", notes: "" })
+
+  const jobsByCustomer = useMemo(() => {
+    const map = new Map<string, JobWithCustomer[]>()
+    jobsById.forEach((job) => {
+      const list = map.get(job.customer_id) || []
+      list.push(job)
+      map.set(job.customer_id, list)
+    })
+    map.forEach((list, key) => {
+      map.set(
+        key,
+        list.sort((a, b) => a.name.localeCompare(b.name)),
+      )
+    })
+    return map
+  }, [jobsById])
+
+  const visibleCustomers = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return customers
+      .filter((customer) => includeArchived || isCustomerActive(customer))
+      .filter((customer) => {
+        if (!q) return true
+        if (customer.name.toLowerCase().includes(q)) return true
+        if ((customer.phone || "").toLowerCase().includes(q)) return true
+        const jobs = jobsByCustomer.get(customer.id) || []
+        return jobs.some(
+          (job) =>
+            job.name.toLowerCase().includes(q) ||
+            formatJobWithCustomerLabel(job).toLowerCase().includes(q),
+        )
+      })
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [customers, includeArchived, search, jobsByCustomer])
+
+  const toggleExpanded = (customerId: string) => {
+    setExpandedCustomerIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(customerId)) next.delete(customerId)
+      else next.add(customerId)
+      return next
+    })
+  }
+
+  const startEditCustomer = (customer: Customer) => {
+    setEditingCustomerId(customer.id)
+    setCustomerForm({
+      name: customer.name,
+      phone: customer.phone || "",
+      email: customer.email || "",
+      address: customer.address || "",
+      notes: customer.notes || "",
+    })
+    setShowAddCustomer(false)
+  }
+
+  const startAddCustomer = () => {
+    setShowAddCustomer(true)
+    setEditingCustomerId(null)
+    setCustomerForm({ name: "", phone: "", email: "", address: "", notes: "" })
+  }
+
+  const saveCustomer = async (e: FormEvent, customerId?: string) => {
+    e.preventDefault()
+    if (busyKey) return
+    if (!customerForm.name.trim()) {
+      onError("Customer name is required.")
+      return
+    }
+    setBusyKey(customerId ? `edit-customer-${customerId}` : "add-customer")
+    onError("")
+
+    const result = customerId
+      ? await updateCustomerRecord(customerId, customerForm)
+      : await createCustomerRecord(customerForm)
+
+    setBusyKey(null)
+    if (result.error || !result.data) {
+      onError(result.error || "Failed to save customer.")
+      return
+    }
+
+    if (customerId) {
+      onCustomersChange(customers.map((c) => (c.id === customerId ? result.data! : c)))
+      setEditingCustomerId(null)
+      onMessage("Customer updated.")
+    } else {
+      onCustomersChange([...customers, result.data].sort((a, b) => a.name.localeCompare(b.name)))
+      setShowAddCustomer(false)
+      setExpandedCustomerIds((prev) => new Set(prev).add(result.data!.id))
+      onMessage("Customer created.")
+    }
+  }
+
+  const saveJob = async (e: FormEvent, customerId: string, jobId?: string) => {
+    e.preventDefault()
+    if (busyKey) return
+    if (!jobForm.name.trim()) {
+      onError("Job name is required.")
+      return
+    }
+    setBusyKey(jobId ? `edit-job-${jobId}` : `add-job-${customerId}`)
+    onError("")
+
+    if (jobId) {
+      const result = await updateJobRecord(jobId, jobForm)
+      setBusyKey(null)
+      if (result.error || !result.data) {
+        onError(result.error || "Failed to update job.")
+        return
+      }
+      const existing = jobsById.get(jobId)
+      onJobUpsert({ ...result.data, customer: existing?.customer || customers.find((c) => c.id === customerId) || null })
+      setEditingJobId(null)
+      onMessage("Job updated.")
+      return
+    }
+
+    const result = await createJobRecord({ customerId, ...jobForm })
+    setBusyKey(null)
+    if (result.error || !result.data) {
+      onError(result.error || "Failed to create job.")
+      return
+    }
+    const customer = customers.find((c) => c.id === customerId) || null
+    onJobUpsert({ ...result.data, customer })
+    setShowAddJobFor(null)
+    onMessage("Job created.")
+  }
+
+  const runJobStatus = async (jobId: string, status: "active" | "completed" | "archived") => {
+    if (!canManageJobs || busyKey) return
+    setBusyKey(`status-${jobId}`)
+    onError("")
+    const result = await updateJobStatusRecord(jobId, status)
+    setBusyKey(null)
+    if (result.error || !result.data) {
+      onError(result.error || "Failed to update job status.")
+      return
+    }
+    onJobUpsert(result.data)
+    onMessage(`Job marked ${status}.`)
+  }
+
+  const runArchiveCustomer = async (customerId: string) => {
+    if (!canManage || busyKey) return
+    setBusyKey(`archive-${customerId}`)
+    onError("")
+    const { id, error } = await archiveCustomerRpc(customerId)
+    setBusyKey(null)
+    if (error || !id) {
+      onError(error || "Failed to archive customer.")
+      return
+    }
+    onCustomersChange(
+      customers.map((c) =>
+        c.id === customerId ? { ...c, status: "archived", archived_at: new Date().toISOString() } : c,
+      ),
+    )
+    onMessage("Customer archived.")
+  }
+
+  const runReopenCustomer = async (customerId: string) => {
+    if (!canManage || busyKey) return
+    setBusyKey(`reopen-${customerId}`)
+    onError("")
+    const { id, error } = await reopenCustomerRpc(customerId)
+    setBusyKey(null)
+    if (error || !id) {
+      onError(error || "Failed to reopen customer.")
+      return
+    }
+    onCustomersChange(
+      customers.map((c) => (c.id === customerId ? { ...c, status: "active", archived_at: null } : c)),
+    )
+    onMessage("Customer reopened.")
+  }
+
+  const runDeleteJob = async (job: JobWithCustomer) => {
+    if (!canManage || busyKey) return
+    const confirmed = confirm(`Permanently delete unused job "${job.name}"?`)
+    if (!confirmed) return
+    setBusyKey(`delete-job-${job.id}`)
+    onError("")
+    const { id, error } = await deleteUnusedJobRpc(job.id)
+    setBusyKey(null)
+    if (error || !id) {
+      onError(error || "Failed to delete job.")
+      return
+    }
+    onJobRemove(job.id)
+    onMessage("Job deleted.")
+  }
+
+  const runDeleteCustomer = async (customer: Customer) => {
+    if (!canManage || busyKey) return
+    const exactLegacyHold = items.some(
+      (item) =>
+        !item.hold_customer_id &&
+        (item.hold_last_name || "").trim().toLowerCase() === customer.name.trim().toLowerCase(),
+    )
+    if (exactLegacyHold) {
+      const proceed = confirm(
+        `Warning: a legacy free-text hold matches "${customer.name}" exactly. Legacy holds do not block deletion. Delete unused customer anyway?`,
+      )
+      if (!proceed) return
+    } else {
+      const confirmed = confirm(`Permanently delete unused customer "${customer.name}"?`)
+      if (!confirmed) return
+    }
+
+    setBusyKey(`delete-customer-${customer.id}`)
+    onError("")
+    const { id, error } = await deleteUnusedCustomerRpc(customer.id)
+    setBusyKey(null)
+    if (error || !id) {
+      onError(error || "Failed to delete customer.")
+      return
+    }
+    onCustomersChange(customers.filter((c) => c.id !== customer.id))
+    onMessage("Customer deleted.")
+  }
+
+  const usageForJob = (jobId: string) => usage.filter((u) => u.job_id === jobId)
+
+  return (
+    <div className="customers-jobs-view">
+      <div className="jobs-toolbar">
+        <input
+          className="search jobs-search"
+          placeholder="Search customers or jobs…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="customers-jobs-toolbar-actions">
+          <button type="button" className="btn-secondary btn-small" onClick={startAddCustomer}>
+            + Add Customer
+          </button>
+        </div>
+      </div>
+
+      <div className="customers-jobs-filters">
+        <label className="jobs-include-completed">
+          <input
+            type="checkbox"
+            checked={includeArchived}
+            onChange={(e) => setIncludeArchived(e.target.checked)}
+          />
+          Include archived customers
+        </label>
+        <label className="jobs-include-completed">
+          <input
+            type="checkbox"
+            checked={includeCompletedJobs}
+            onChange={(e) => setIncludeCompletedJobs(e.target.checked)}
+          />
+          Include completed / archived jobs
+        </label>
+      </div>
+
+      {showAddCustomer && (
+        <form className="card jobs-group-card" onSubmit={(e) => void saveCustomer(e)}>
+          <h3>New Customer</h3>
+          <CustomerFieldsForm form={customerForm} setForm={setCustomerForm} disabled={!!busyKey} />
+          <div className="modal-actions">
+            <button type="button" onClick={() => setShowAddCustomer(false)} disabled={!!busyKey}>
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary" disabled={!!busyKey}>
+              {busyKey === "add-customer" ? "Saving…" : "Create"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {visibleCustomers.length === 0 ? (
+        <div className="empty">No customers yet.</div>
+      ) : (
+        visibleCustomers.map((customer) => {
+          const expanded = expandedCustomerIds.has(customer.id)
+          const jobs = (jobsByCustomer.get(customer.id) || []).filter((job) => {
+            if (includeCompletedJobs) return true
+            return (job.status || "").toLowerCase() === "active"
+          })
+          const active = isCustomerActive(customer)
+
+          return (
+            <div key={customer.id} className="card jobs-group-card">
+              <div className="jobs-group-header customers-jobs-customer-header">
+                <button
+                  type="button"
+                  className="customers-jobs-expand"
+                  onClick={() => toggleExpanded(customer.id)}
+                  aria-expanded={expanded}
+                >
+                  <span aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+                  <h3>
+                    {customer.name}
+                    {!active && <span className="badge">archived</span>}
+                  </h3>
+                </button>
+                <div className="customers-jobs-header-actions">
+                  <button
+                    type="button"
+                    className="btn-secondary btn-small"
+                    onClick={() => startEditCustomer(customer)}
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
+
+              {(customer.phone || customer.email || customer.address) && (
+                <div className="small customers-jobs-contact">
+                  {[customer.phone, customer.email, customer.address].filter(Boolean).join(" · ")}
+                </div>
+              )}
+
+              {editingCustomerId === customer.id && (
+                <form className="customers-jobs-edit-form" onSubmit={(e) => void saveCustomer(e, customer.id)}>
+                  <CustomerFieldsForm form={customerForm} setForm={setCustomerForm} disabled={!!busyKey} />
+                  <div className="modal-actions">
+                    <button type="button" onClick={() => setEditingCustomerId(null)} disabled={!!busyKey}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn-primary" disabled={!!busyKey}>
+                      {busyKey === `edit-customer-${customer.id}` ? "Saving…" : "Save"}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {expanded && (
+                <div className="customers-jobs-expanded">
+                  <strong>Jobs</strong>
+                  {jobs.length === 0 ? (
+                    <div className="jobs-line-empty">No jobs to show.</div>
+                  ) : (
+                    jobs.map((job) => {
+                      const lines = usageForJob(job.id)
+                      return (
+                        <div key={job.id} className="customers-jobs-job-block">
+                          <div className="jobs-line-row">
+                            <div className="jobs-line">
+                              • {job.name}{" "}
+                              <span className="badge">{job.status}</span>
+                            </div>
+                          </div>
+
+                          {canManageJobs && (
+                            <div className="jobs-status-actions">
+                              {(job.status || "") === "active" ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="btn-secondary btn-small"
+                                    disabled={!!busyKey}
+                                    onClick={() => void runJobStatus(job.id, "completed")}
+                                  >
+                                    Complete
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn-secondary btn-small"
+                                    disabled={!!busyKey}
+                                    onClick={() => void runJobStatus(job.id, "archived")}
+                                  >
+                                    Archive
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="btn-secondary btn-small"
+                                  disabled={!!busyKey}
+                                  onClick={() => void runJobStatus(job.id, "active")}
+                                >
+                                  Reopen
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="btn-secondary btn-small"
+                                disabled={!!busyKey}
+                                onClick={() => {
+                                  setEditingJobId(job.id)
+                                  setJobForm({
+                                    name: job.name,
+                                    address: job.address || "",
+                                    notes: job.notes || "",
+                                  })
+                                  setShowAddJobFor(null)
+                                }}
+                              >
+                                Edit
+                              </button>
+                              {canManage && (
+                                <button
+                                  type="button"
+                                  className="btn-danger btn-small"
+                                  disabled={!!busyKey}
+                                  onClick={() => void runDeleteJob(job)}
+                                >
+                                  Delete unused
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {editingJobId === job.id && (
+                            <form
+                              className="customers-jobs-edit-form"
+                              onSubmit={(e) => void saveJob(e, customer.id, job.id)}
+                            >
+                              <JobFieldsForm form={jobForm} setForm={setJobForm} disabled={!!busyKey} />
+                              <div className="modal-actions">
+                                <button type="button" onClick={() => setEditingJobId(null)} disabled={!!busyKey}>
+                                  Cancel
+                                </button>
+                                <button type="submit" className="btn-primary" disabled={!!busyKey}>
+                                  Save job
+                                </button>
+                              </div>
+                            </form>
+                          )}
+
+                          <div className="small">Material usage</div>
+                          {lines.length === 0 ? (
+                            <div className="jobs-line-empty">No material usage yet.</div>
+                          ) : (
+                            lines.map((u) => {
+                              const item = items.find((i) => i.id === u.item_id)
+                              return (
+                                <div key={u.id} className="jobs-line">
+                                  • {item?.product_name || "Item"} — {u.quantity_used || 0}{" "}
+                                  {item?.quantity_type || ""}
+                                  {u.used_at && (
+                                    <span className="jobs-line-meta">
+                                      {" "}
+                                      — {new Date(u.used_at).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                              )
+                            })
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
+
+                  {active && (
+                    <>
+                      {showAddJobFor === customer.id ? (
+                        <form
+                          className="customers-jobs-edit-form"
+                          onSubmit={(e) => void saveJob(e, customer.id)}
+                        >
+                          <h4>New Job for {customer.name}</h4>
+                          <JobFieldsForm form={jobForm} setForm={setJobForm} disabled={!!busyKey} />
+                          <div className="modal-actions">
+                            <button type="button" onClick={() => setShowAddJobFor(null)} disabled={!!busyKey}>
+                              Cancel
+                            </button>
+                            <button type="submit" className="btn-primary" disabled={!!busyKey}>
+                              Create job
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-secondary btn-small"
+                          onClick={() => {
+                            setShowAddJobFor(customer.id)
+                            setJobForm({ name: "", address: "", notes: "" })
+                            setEditingJobId(null)
+                          }}
+                        >
+                          + Add Job for {customer.name}
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {canManage && (
+                    <div className="jobs-status-actions" style={{ marginTop: 12 }}>
+                      {active ? (
+                        <button
+                          type="button"
+                          className="btn-secondary btn-small"
+                          disabled={!!busyKey}
+                          onClick={() => void runArchiveCustomer(customer.id)}
+                        >
+                          Archive Customer
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-secondary btn-small"
+                          disabled={!!busyKey}
+                          onClick={() => void runReopenCustomer(customer.id)}
+                        >
+                          Reopen Customer
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-danger btn-small"
+                        disabled={!!busyKey}
+                        onClick={() => void runDeleteCustomer(customer)}
+                      >
+                        Delete unused customer
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+function CustomerFieldsForm({
+  form,
+  setForm,
+  disabled,
+}: {
+  form: { name: string; phone: string; email: string; address: string; notes: string }
+  setForm: (value: { name: string; phone: string; email: string; address: string; notes: string }) => void
+  disabled: boolean
+}) {
+  return (
+    <div className="job-flow-body">
+      <label className="job-flow-label">Name</label>
+      <input
+        className="job-flow-input"
+        value={form.name}
+        disabled={disabled}
+        onChange={(e) => setForm({ ...form, name: e.target.value })}
+        required
+      />
+      <label className="job-flow-label">Phone</label>
+      <input
+        className="job-flow-input"
+        value={form.phone}
+        disabled={disabled}
+        onChange={(e) => setForm({ ...form, phone: e.target.value })}
+      />
+      <label className="job-flow-label">Email</label>
+      <input
+        className="job-flow-input"
+        type="email"
+        value={form.email}
+        disabled={disabled}
+        onChange={(e) => setForm({ ...form, email: e.target.value })}
+      />
+      <label className="job-flow-label">Address</label>
+      <input
+        className="job-flow-input"
+        value={form.address}
+        disabled={disabled}
+        onChange={(e) => setForm({ ...form, address: e.target.value })}
+      />
+      <label className="job-flow-label">Notes</label>
+      <textarea
+        className="job-flow-textarea"
+        rows={2}
+        value={form.notes}
+        disabled={disabled}
+        onChange={(e) => setForm({ ...form, notes: e.target.value })}
+      />
+    </div>
+  )
+}
+
+function JobFieldsForm({
+  form,
+  setForm,
+  disabled,
+}: {
+  form: { name: string; address: string; notes: string }
+  setForm: (value: { name: string; address: string; notes: string }) => void
+  disabled: boolean
+}) {
+  return (
+    <div className="job-flow-body">
+      <label className="job-flow-label">Job name</label>
+      <input
+        className="job-flow-input"
+        value={form.name}
+        disabled={disabled}
+        onChange={(e) => setForm({ ...form, name: e.target.value })}
+        required
+      />
+      <label className="job-flow-label">Address</label>
+      <input
+        className="job-flow-input"
+        value={form.address}
+        disabled={disabled}
+        onChange={(e) => setForm({ ...form, address: e.target.value })}
+      />
+      <label className="job-flow-label">Notes</label>
+      <textarea
+        className="job-flow-textarea"
+        rows={2}
+        value={form.notes}
+        disabled={disabled}
+        onChange={(e) => setForm({ ...form, notes: e.target.value })}
+      />
+    </div>
+  )
+}
