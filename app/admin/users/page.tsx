@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "../../../lib/supabaseClient"
+import AdminSubNav from "../../components/AdminSubNav"
 import { useAuth } from "../../components/AuthProvider"
 import {
   ASSIGNABLE_ROLES,
@@ -98,6 +99,7 @@ export default function AdminUsersPage() {
 
   return (
     <main>
+      <AdminSubNav />
       <section className="card">
         <h2>User access</h2>
         <p className="subtext">

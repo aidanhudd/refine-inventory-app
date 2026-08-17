@@ -40,7 +40,10 @@ export default function NavBar() {
         })}
 
         {admin && (
-          <Link href="/admin/users" className={linkClass("/admin/users")}>
+          <Link
+            href="/admin/users"
+            className={pathname.startsWith("/admin") ? "nav-link nav-link-active" : "nav-link"}
+          >
             Admin
           </Link>
         )}
