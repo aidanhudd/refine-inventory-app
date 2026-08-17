@@ -78,6 +78,7 @@ export default function InventoryItemActions({
   const { config } = useAppearance()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const moreRootRef = useRef<HTMLDivElement>(null)
+  const moreToggleRef = useRef<HTMLButtonElement>(null)
   const [moreOpen, setMoreOpen] = useState(false)
   const morePanelId = useId()
 
@@ -90,6 +91,13 @@ export default function InventoryItemActions({
   )
   const showMoreActions = visibleMoreSlots.length > 0
 
+  const closeMoreActions = (restoreFocus = false) => {
+    setMoreOpen(false)
+    if (restoreFocus) {
+      moreToggleRef.current?.focus()
+    }
+  }
+
   useEffect(() => {
     if (!moreOpen) return
 
@@ -100,17 +108,9 @@ export default function InventoryItemActions({
       setMoreOpen(false)
     }
 
-    const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setMoreOpen(false)
-      }
-    }
-
     document.addEventListener("pointerdown", onDocPointerDown)
-    document.addEventListener("keydown", onKeyDown)
     return () => {
       document.removeEventListener("pointerdown", onDocPointerDown)
-      document.removeEventListener("keydown", onKeyDown)
     }
   }, [moreOpen])
 
@@ -129,6 +129,14 @@ export default function InventoryItemActions({
     if (stopCardActivation) stopActivation(e)
     setMoreOpen(false)
     handler()
+  }
+
+  const handleMoreRootKeyDownCapture = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Escape" || !moreOpen) return
+    // Handle here (capture) so Escape works even when action-row stops bubbling to document.
+    e.preventDefault()
+    e.stopPropagation()
+    closeMoreActions(true)
   }
 
   const handlers: Record<InventoryCardActionId, (() => void) | null> = {
@@ -200,8 +208,10 @@ export default function InventoryItemActions({
           ]
             .filter(Boolean)
             .join(" ")}
+          onKeyDownCapture={handleMoreRootKeyDownCapture}
         >
           <Button
+            ref={moreToggleRef}
             type="button"
             variant="secondary"
             size="sm"
