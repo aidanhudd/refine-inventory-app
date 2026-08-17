@@ -136,7 +136,7 @@ export default function AdminAppearancePage() {
     !!adminIdentityKey &&
     editorStatus !== "loading" &&
     !mutationBusy &&
-    dirty &&
+    (dirty || !draftPersisted) &&
     strictValidation.ok &&
     !titleError
 
@@ -231,10 +231,10 @@ export default function AdminAppearancePage() {
         const next = cloneAppearanceConfig(result.fallbackConfig)
         setDraft(next)
         setBaseline(serializeConfig(next))
-        setRestoredFromVersionId(result.restoredFromVersionId)
-        setDraftPersisted(result.draftId != null)
+        setRestoredFromVersionId(null)
+        setDraftPersisted(false)
         setLoadWarning(
-          `${result.message} Showing compiled defaults in the editor. ${issueSummary(result.issues)}`,
+          `${result.message} Showing compiled defaults in the editor. Save Draft will replace the invalid private draft. ${issueSummary(result.issues)}`,
         )
         setEditorStatus("ready")
         return
