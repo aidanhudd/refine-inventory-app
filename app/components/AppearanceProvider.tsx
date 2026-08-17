@@ -104,7 +104,8 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
   const settledIdentityRef = useRef<string | null>(null)
 
   const userId = user?.id ?? null
-  const canAccess = hasAppAccess(profile)
+  const profileMatchesUser = !!userId && profile?.id === userId
+  const canAccess = profileMatchesUser && hasAppAccess(profile)
   const identityKey = userId && canAccess ? userId : null
 
   useEffect(() => {
