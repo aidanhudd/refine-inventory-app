@@ -129,11 +129,13 @@ export default function AdminAppearancePage() {
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null)
   const [publishLabel, setPublishLabel] = useState("")
-  const [publishUncertain, setPublishUncertain] = useState(false)
   const [sessionPublishedVersionId, setSessionPublishedVersionId] = useState<string | null>(null)
   const [sessionPublishedVersionNumber, setSessionPublishedVersionNumber] = useState<bigint | null>(
     null,
   )
+  /** Identities that hit an uncertain publish timeout this page session (never cleared except remount). */
+  const publishUncertainIdentitiesRef = useRef<Set<string>>(new Set())
+  const [publishUncertainEpoch, setPublishUncertainEpoch] = useState(0)
 
   const loadRequestIdRef = useRef(0)
   const saveRequestIdRef = useRef(0)
@@ -153,6 +155,10 @@ export default function AdminAppearancePage() {
   const strictValidation = useMemo(() => validateAppearanceConfigStrict(draft), [draft])
   const titleError = titleFieldError(draft.branding.appTitle)
   const publishLabelCheck = normalizeAppearancePublishLabel(publishLabel)
+  const publishUncertain =
+    !!adminIdentityKey &&
+    publishUncertainIdentitiesRef.current.has(adminIdentityKey) &&
+    publishUncertainEpoch >= 0
   const mutationBusy =
     editorStatus === "saving" ||
     editorStatus === "resetting" ||
@@ -177,18 +183,42 @@ export default function AdminAppearancePage() {
     !publishUncertain &&
     publishLabelCheck.ok
 
+  /** Only when AppearanceProvider actually applied published config (not defaults fallback). */
+  const appliedPublishedVersionId =
+    !isUsingDefaults && loadedPublishedVersionId ? loadedPublishedVersionId : null
+  const appliedPublishedVersionNumber =
+    !isUsingDefaults && loadedPublishedVersionNumber != null
+      ? loadedPublishedVersionNumber
+      : null
+
   const publishedStatusText = useMemo(() => {
     if (sessionPublishedVersionNumber != null) {
       return `Version ${sessionPublishedVersionNumber.toString()} was published from this page. Refresh this tab and other open sessions to load it.`
     }
-    if (loadedPublishedVersionNumber != null && !isUsingDefaults) {
-      return `Currently loaded published version: ${loadedPublishedVersionNumber.toString()}.`
+    if (appliedPublishedVersionNumber != null) {
+      return `Currently loaded published version: ${appliedPublishedVersionNumber.toString()}.`
     }
     if (loadedPublishedVersionNumber != null && isUsingDefaults) {
       return `Published version ${loadedPublishedVersionNumber.toString()} exists, but this session is using compiled defaults.`
     }
     return "No published appearance version is loaded — this session is using compiled defaults."
-  }, [sessionPublishedVersionNumber, loadedPublishedVersionNumber, isUsingDefaults])
+  }, [
+    sessionPublishedVersionNumber,
+    appliedPublishedVersionNumber,
+    loadedPublishedVersionNumber,
+    isUsingDefaults,
+  ])
+
+  const invalidateOutstandingRequests = useCallback(() => {
+    loadRequestIdRef.current += 1
+    saveRequestIdRef.current += 1
+    resetRequestIdRef.current += 1
+    restoreRequestIdRef.current += 1
+    publishRequestIdRef.current += 1
+    historyRequestIdRef.current += 1
+    mutationKindRef.current = null
+    saveSnapshotRef.current = null
+  }, [])
 
   const applyEditorReset = useCallback((status: EditorStatus = "idle") => {
     const next = resetEditorDefaults()
@@ -234,20 +264,19 @@ export default function AdminAppearancePage() {
   }, [])
 
   useEffect(() => {
+    // Always invalidate prior identity work first (covers admin→admin without a null gap).
+    invalidateOutstandingRequests()
+    setPublishLabel("")
+    setSessionPublishedVersionId(null)
+    setSessionPublishedVersionNumber(null)
+    setRestoringVersionId(null)
+
     if (!adminIdentityKey) {
-      loadRequestIdRef.current += 1
-      saveRequestIdRef.current += 1
-      resetRequestIdRef.current += 1
-      restoreRequestIdRef.current += 1
-      publishRequestIdRef.current += 1
-      historyRequestIdRef.current += 1
-      mutationKindRef.current = null
-      saveSnapshotRef.current = null
       applyEditorReset("idle")
       return
     }
 
-    const requestId = ++loadRequestIdRef.current
+    const requestId = loadRequestIdRef.current
     const identityForRequest = adminIdentityKey
     let cancelled = false
 
@@ -312,7 +341,7 @@ export default function AdminAppearancePage() {
     return () => {
       cancelled = true
     }
-  }, [adminIdentityKey, applyEditorReset, loadHistory])
+  }, [adminIdentityKey, applyEditorReset, invalidateOutstandingRequests, loadHistory])
 
   useEffect(() => {
     if (!dirty) return
@@ -401,13 +430,12 @@ export default function AdminAppearancePage() {
 
     const result = await upsertAppearanceDraft(draft)
 
-    if (mutationKindRef.current === "save") {
-      mutationKindRef.current = null
-    }
-
     if (requestId !== saveRequestIdRef.current) return
     if (identityForSave !== adminIdentityKeyRef.current) return
     if (saveSnapshotRef.current !== snapshot) return
+    if (mutationKindRef.current === "save") {
+      mutationKindRef.current = null
+    }
 
     if (result.status === "saved") {
       setDraft(cloneAppearanceConfig(result.row.config))
@@ -452,12 +480,11 @@ export default function AdminAppearancePage() {
 
     const result = await resetAppearanceDraft()
 
+    if (requestId !== resetRequestIdRef.current) return
+    if (identityForReset !== adminIdentityKeyRef.current) return
     if (mutationKindRef.current === "reset") {
       mutationKindRef.current = null
     }
-
-    if (requestId !== resetRequestIdRef.current) return
-    if (identityForReset !== adminIdentityKeyRef.current) return
 
     if (result.status === "reset") {
       const next = resetEditorDefaults()
@@ -499,14 +526,10 @@ export default function AdminAppearancePage() {
 
     const result = await restoreAppearanceVersionToDraft(versionId)
 
+    if (requestId !== restoreRequestIdRef.current) return
+    if (identityForRestore !== adminIdentityKeyRef.current) return
     if (mutationKindRef.current === "restore") {
       mutationKindRef.current = null
-    }
-
-    if (requestId !== restoreRequestIdRef.current) return
-    if (identityForRestore !== adminIdentityKeyRef.current) {
-      setRestoringVersionId(null)
-      return
     }
 
     setRestoringVersionId(null)
@@ -553,12 +576,11 @@ export default function AdminAppearancePage() {
 
     const result = await publishAppearanceDraft(publishLabel)
 
+    if (requestId !== publishRequestIdRef.current) return
+    if (identityForPublish !== adminIdentityKeyRef.current) return
     if (mutationKindRef.current === "publish") {
       mutationKindRef.current = null
     }
-
-    if (requestId !== publishRequestIdRef.current) return
-    if (identityForPublish !== adminIdentityKeyRef.current) return
 
     if (result.status === "published") {
       setRestoredFromVersionId(null)
@@ -574,7 +596,8 @@ export default function AdminAppearancePage() {
     }
 
     if (result.status === "timeout") {
-      setPublishUncertain(true)
+      publishUncertainIdentitiesRef.current.add(identityForPublish)
+      setPublishUncertainEpoch((epoch) => epoch + 1)
       setSaveError(result.message)
       setEditorStatus("error")
       void loadHistory()
@@ -840,7 +863,7 @@ export default function AdminAppearancePage() {
               errorMessage={historyError}
               disabled={controlsDisabled}
               restoringVersionId={restoringVersionId}
-              loadedPublishedVersionId={loadedPublishedVersionId}
+              appliedPublishedVersionId={appliedPublishedVersionId}
               sessionPublishedVersionId={sessionPublishedVersionId}
               onRefresh={() => void loadHistory()}
               onRestore={(versionId) => void restoreVersionToDraft(versionId)}
