@@ -35,7 +35,6 @@ export default function AppearanceOrderList<T extends string>({
 }: AppearanceOrderListProps<T>) {
   const liveId = useId()
   const [announcement, setAnnouncement] = useState("")
-  const [announceTick, setAnnounceTick] = useState(0)
   const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const pendingFocusRef = useRef<{ id: T; direction: ReorderDirection } | null>(null)
 
@@ -71,11 +70,7 @@ export default function AppearanceOrderList<T extends string>({
     const label = labelById.get(id) || id
     pendingFocusRef.current = { id, direction }
     onReorder(next)
-    // Remount the live region so repeated identical moves still announce.
-    setAnnounceTick((tick) => tick + 1)
-    setAnnouncement(
-      `Moved ${label} to position ${newIndex + 1} of ${next.length}.`,
-    )
+    setAnnouncement(`Moved ${label} to position ${newIndex + 1} of ${next.length}.`)
   }
 
   return (
@@ -131,13 +126,7 @@ export default function AppearanceOrderList<T extends string>({
           )
         })}
       </ol>
-      <div
-        key={`${liveId}-${announceTick}`}
-        id={liveId}
-        className="sr-only"
-        aria-live="polite"
-        aria-atomic="true"
-      >
+      <div id={liveId} className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
       </div>
     </div>
