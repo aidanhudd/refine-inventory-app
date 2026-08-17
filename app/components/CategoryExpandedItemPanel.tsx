@@ -25,6 +25,8 @@ type CategoryExpandedItemPanelProps = {
   showSoldUndo: boolean
   isUploadingPhotos: boolean
   formatCurrency: (value: number) => string
+  canUndoUsage?: (usage: InventoryItemCardUsage) => boolean
+  undoingUsageId?: string | null
   onUpdateDraft: (key: keyof InventoryItemCardDraft, value: string) => void
   onSave: () => void
   onCancel: () => void

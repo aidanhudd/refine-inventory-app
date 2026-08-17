@@ -41,6 +41,10 @@ export function isAdmin(role: string | null | undefined): boolean {
   return role === "admin"
 }
 
+export function isManagerOrAdmin(role: string | null | undefined): boolean {
+  return role === "manager" || role === "admin"
+}
+
 export function getRoleLabel(role: UserRole | string | null | undefined): string {
   switch (role) {
     case "pending":

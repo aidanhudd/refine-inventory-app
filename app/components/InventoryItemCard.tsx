@@ -32,6 +32,8 @@ export type InventoryItemCardItem = {
 
 export type InventoryItemCardUsage = {
   id: string
+  user_id?: string | null
+  job_id?: string | null
   job_name: string | null
   quantity_used: number | null
   used_at: string | null
@@ -66,6 +68,8 @@ type InventoryItemCardProps = {
   showSoldUndo: boolean
   isUploadingPhotos: boolean
   formatCurrency: (value: number) => string
+  canUndoUsage?: (usage: InventoryItemCardUsage) => boolean
+  undoingUsageId?: string | null
   onUpdateDraft: (key: keyof InventoryItemCardDraft, value: string) => void
   onSave: () => void
   onCancel: () => void
@@ -98,6 +102,8 @@ export default function InventoryItemCard({
   showSoldUndo,
   isUploadingPhotos,
   formatCurrency,
+  canUndoUsage,
+  undoingUsageId,
   onUpdateDraft,
   onSave,
   onCancel,
@@ -311,25 +317,30 @@ export default function InventoryItemCard({
                 • {usage.job_name || "No Job"} — {usage.quantity_used || 0} {item.quantity_type || ""} —{" "}
                 {usage.used_at ? new Date(usage.used_at).toLocaleDateString() : ""}
               </span>
-              <button
-                onClick={() => {
-                  const confirmed = confirm("Undo this usage?")
-                  if (!confirmed) return
-                  onUndoUsage(usage.id, Number(usage.quantity_used || 0))
-                }}
-                style={{
-                  marginLeft: "8px",
-                  background: "red",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontSize: "11px",
-                  padding: "2px 6px",
-                }}
-              >
-                Undo
-              </button>
+              {(!canUndoUsage || canUndoUsage(usage)) && (
+                <button
+                  disabled={!!undoingUsageId}
+                  onClick={() => {
+                    if (undoingUsageId) return
+                    const confirmed = confirm("Undo this usage?")
+                    if (!confirmed) return
+                    onUndoUsage(usage.id, Number(usage.quantity_used || 0))
+                  }}
+                  style={{
+                    marginLeft: "8px",
+                    background: "red",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: undoingUsageId ? "default" : "pointer",
+                    fontSize: "11px",
+                    padding: "2px 6px",
+                    opacity: undoingUsageId ? 0.7 : 1,
+                  }}
+                >
+                  {undoingUsageId === usage.id ? "Undoing..." : "Undo"}
+                </button>
+              )}
             </div>
           ))}
         </div>

@@ -116,6 +116,20 @@ h3 { font-size: 18px; line-height: 1.3; }
   min-width: 220px;
   margin-bottom: 0;
 }
+.jobs-include-completed {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.jobs-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
 .jobs-group-card {
   margin-bottom: 16px;
 }
@@ -136,6 +150,11 @@ h3 { font-size: 18px; line-height: 1.3; }
 .jobs-line {
   font-size: 13px;
   margin-top: 4px;
+}
+.jobs-line-empty {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 4px 0 8px;
 }
 .jobs-line-row {
   display: flex;
@@ -891,6 +910,117 @@ button:focus-visible {
 .section-gap { margin-top: 20px; }
 .modal-overlay { position: fixed; inset: 0; width: 100vw; height: 100vh; background: var(--modal-overlay); display: flex; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
 .modal-panel { width: 100%; max-width: 400px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 22px; box-shadow: var(--card-shadow-hover); }
+.modal-panel-job-flow {
+  max-width: 440px;
+  max-height: min(92vh, 760px);
+  overflow-y: auto;
+}
+.job-flow-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.job-flow-header h3 {
+  flex: 1;
+}
+.job-flow-body {
+  display: grid;
+  gap: 8px;
+}
+.job-flow-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.job-flow-input,
+.job-flow-textarea {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 16px;
+}
+.job-flow-textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+.job-flow-selector {
+  position: relative;
+}
+.job-flow-selected {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--success);
+}
+.job-flow-results {
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  max-height: 220px;
+  overflow-y: auto;
+  display: grid;
+}
+.job-flow-result {
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 12px;
+  min-height: 44px;
+  color: var(--text);
+  cursor: pointer;
+}
+.job-flow-result:last-child {
+  border-bottom: 0;
+}
+.job-flow-result:hover,
+.job-flow-result:focus-visible {
+  background: var(--accent);
+}
+.job-flow-result-create {
+  font-weight: 700;
+  color: var(--edit-text);
+}
+.job-flow-result-empty {
+  padding: 12px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.job-flow-warning {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.job-flow-warning ul {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+.job-flow-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.linkish {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
 .modal-panel-wide {
   max-width: 760px;
   max-height: min(90vh, 920px);
@@ -948,6 +1078,12 @@ button:focus-visible {
 
   input:hover, select:hover, textarea:hover {
     border-color: #4e607f;
+  }
+
+  .job-flow-warning {
+    border-color: #854d0e;
+    background: #422006;
+    color: #fde68a;
   }
 }
 

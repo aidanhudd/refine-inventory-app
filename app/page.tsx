@@ -8,6 +8,7 @@ import { useHidePrices } from "./components/HidePricesProvider"
 import InventoryItemCard from "./components/InventoryItemCard"
 import InventoryCategoryGridCard from "./components/InventoryCategoryGridCard"
 import CategoryExpandedItemPanel from "./components/CategoryExpandedItemPanel"
+import UseInventoryModal from "./components/UseInventoryModal"
 import ItemDimensionsFields from "./components/ItemDimensionsFields"
 import {
   buildDimensionPayload,
@@ -16,6 +17,7 @@ import {
   formatSquareFeetNumber,
   normalizeDimensionValue,
 } from "../lib/inventoryDimensions"
+import { canUndoSharedUsage } from "../lib/customersJobs"
 
 type Category = {
   id: string
@@ -57,6 +59,7 @@ type UsageRow = {
   id: string
   item_id: string
   user_id: string | null
+  job_id: string | null
   job_name: string | null
   quantity_used: number | null
   notes: string | null
@@ -167,6 +170,14 @@ const getActionableSupabaseError = (message: string) => {
     return "Permission denied on inventory_items update. Check RLS/table permissions for authenticated users."
   }
 
+  if (
+    lower.includes("customers") ||
+    lower.includes("jobs") ||
+    (lower.includes("column") && lower.includes("job_id"))
+  ) {
+    return "Database migration missing: run supabase/migrations/20260817152650_customers_jobs_schema.sql in Supabase SQL Editor, then retry."
+  }
+
   return message
 }
 
@@ -189,7 +200,7 @@ const validateCategorySubcategory = (
 }
 
 export default function Home() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const { hidePrices } = useHidePrices()
   const [items, setItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
@@ -212,13 +223,12 @@ export default function Home() {
   const [useModalOpen, setUseModalOpen] = useState(false)
   const [holdModalOpen, setHoldModalOpen] = useState(false)
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null)
-  const [useQty, setUseQty] = useState("")
-  const [useJob, setUseJob] = useState("")
   const [holdLastName, setHoldLastName] = useState("")
   const [inlineEditingId, setInlineEditingId] = useState<string | null>(null)
   const [inlineDraft, setInlineDraft] = useState<InlineEditForm | null>(null)
   const [inlineSaving, setInlineSaving] = useState(false)
   const [soldUndoMap, setSoldUndoMap] = useState<Record<string, SoldUndoSnapshot>>({})
+  const [undoingUsageId, setUndoingUsageId] = useState<string | null>(null)
   const [settingMatsBootstrapping, setSettingMatsBootstrapping] = useState(false)
   const [inventoryViewMode, setInventoryViewMode] = useState<InventoryViewMode>("list")
   const [collapsedBrowseGroups, setCollapsedBrowseGroups] = useState<Set<string>>(() => new Set())
@@ -819,28 +829,42 @@ export default function Home() {
     setMessage("Item deleted.")
   }
 
-  const useInventory = async (itemId: string, qty: number, jobName: string) => {
+  const useInventory = async (
+    itemId: string,
+    qty: number,
+    jobId: string,
+    jobLabel: string,
+  ): Promise<string | null> => {
     setErrorMessage("")
     setMessage("")
 
     if (!user) {
-      setErrorMessage("You must be logged in to record usage.")
-      return
+      const msg = "You must be logged in to record usage."
+      setErrorMessage(msg)
+      return msg
     }
 
     const item = items.find((i) => i.id === itemId)
-    if (!item) return
+    if (!item) return "Item not found."
 
     const currentQty = Number(item.quantity_on_hand || 0)
 
     if (qty <= 0) {
-      setErrorMessage("Usage quantity must be greater than 0.")
-      return
+      const msg = "Usage quantity must be greater than 0."
+      setErrorMessage(msg)
+      return msg
     }
 
     if (qty > currentQty) {
-      setErrorMessage("You cannot use more stock than you have.")
-      return
+      const msg = "You cannot use more stock than you have."
+      setErrorMessage(msg)
+      return msg
+    }
+
+    if (!jobId || !jobLabel.trim()) {
+      const msg = "Select a job before recording usage."
+      setErrorMessage(msg)
+      return msg
     }
 
     const { data: insertedUsage, error: usageError } = await supabase
@@ -849,7 +873,8 @@ export default function Home() {
         {
           item_id: itemId,
           user_id: user.id,
-          job_name: jobName,
+          job_id: jobId,
+          job_name: jobLabel.trim(),
           quantity_used: qty,
         },
       ])
@@ -857,8 +882,9 @@ export default function Home() {
       .single()
 
     if (usageError || !insertedUsage) {
-      setErrorMessage(getActionableSupabaseError(usageError?.message || "Failed to record usage."))
-      return
+      const msg = getActionableSupabaseError(usageError?.message || "Failed to record usage.")
+      setErrorMessage(msg)
+      return msg
     }
 
     const newQty = currentQty - qty
@@ -869,8 +895,9 @@ export default function Home() {
       .eq("id", itemId)
 
     if (updateError) {
-      setErrorMessage(getActionableSupabaseError(updateError.message))
-      return
+      const msg = getActionableSupabaseError(updateError.message)
+      setErrorMessage(msg)
+      return msg
     }
 
     setItems((prev) =>
@@ -880,6 +907,7 @@ export default function Home() {
     )
     setUsageList((prev) => [insertedUsage as UsageRow, ...prev])
     setMessage("Usage recorded.")
+    return null
   }
 
   const openHoldModal = (item: InventoryItem) => {
@@ -951,42 +979,66 @@ export default function Home() {
     setMessage("Hold released. Item is available to show.")
   }
 
-  const undoUsage = async (usageId: string, itemId: string, qty: number) => {
+  const undoUsage = async (usageId: string) => {
+    if (undoingUsageId) return
+
+    setUndoingUsageId(usageId)
     setErrorMessage("")
     setMessage("")
 
-    const { error: deleteError } = await supabase
+    const { data: deletedRows, error: deleteError } = await supabase
       .from("inventory_usage")
       .delete()
       .eq("id", usageId)
+      .select("id, item_id, quantity_used")
 
     if (deleteError) {
       setErrorMessage(deleteError.message)
+      setUndoingUsageId(null)
       return
     }
 
-    const item = items.find((i) => i.id === itemId)
-    if (!item) return
+    if (!deletedRows || deletedRows.length !== 1) {
+      setErrorMessage("Usage could not be undone. No matching usage row was deleted.")
+      setUndoingUsageId(null)
+      return
+    }
 
-    const newQty = Number(item.quantity_on_hand || 0) + Number(qty || 0)
+    const deleted = deletedRows[0]
+    const restoredItemId = deleted.item_id as string
+    const restoredQty = Number(deleted.quantity_used || 0)
+
+    const item = items.find((i) => i.id === restoredItemId)
+    if (!item) {
+      setErrorMessage("Usage row was deleted, but the inventory item could not be found to restore quantity.")
+      setUsageList((prev) => prev.filter((usage) => usage.id !== deleted.id))
+      setUndoingUsageId(null)
+      return
+    }
+
+    const newQty = Number(item.quantity_on_hand || 0) + restoredQty
 
     const { error: updateError } = await supabase
       .from("inventory_items")
       .update({ quantity_on_hand: newQty })
-      .eq("id", itemId)
+      .eq("id", restoredItemId)
 
     if (updateError) {
       setErrorMessage(updateError.message)
+      setUndoingUsageId(null)
       return
     }
 
-    setUsageList((prev) => prev.filter((usage) => usage.id !== usageId))
+    setUsageList((prev) => prev.filter((usage) => usage.id !== deleted.id))
     setItems((prev) =>
       prev.map((inventoryItem) =>
-        inventoryItem.id === itemId ? { ...inventoryItem, quantity_on_hand: newQty } : inventoryItem
-      )
+        inventoryItem.id === restoredItemId
+          ? { ...inventoryItem, quantity_on_hand: newQty }
+          : inventoryItem,
+      ),
     )
     setMessage("Usage undone.")
+    setUndoingUsageId(null)
   }
 
   const markSold = async (id: string) => {
@@ -1185,6 +1237,13 @@ export default function Home() {
       showSoldUndo: !!soldUndoMap[item.id],
       isUploadingPhotos: uploadingItemId === item.id,
       formatCurrency,
+      canUndoUsage: (usage: { user_id?: string | null }) =>
+        canUndoSharedUsage({
+          usageUserId: usage.user_id,
+          currentUserId: user?.id,
+          role: profile?.role,
+        }),
+      undoingUsageId,
       onUpdateDraft: updateInlineDraft,
       onSave: () => void saveInlineEdit(item),
       onCancel: cancelInlineEdit,
@@ -1198,7 +1257,7 @@ export default function Home() {
       },
       onHold: () => openHoldModal(item),
       onReleaseHold: () => void releaseItemHold(item.id),
-      onUndoUsage: (usageId: string, qty: number) => void undoUsage(usageId, item.id, qty),
+      onUndoUsage: (usageId: string) => void undoUsage(usageId),
       onUploadPhotos: (e: ChangeEvent<HTMLInputElement>) => void uploadMorePhotos(item.id, e),
       onPhotoClick: setActiveImage,
       onPhotoDelete: (url: string) => void deleteItemPhoto(item.id, url),
@@ -1730,58 +1789,16 @@ export default function Home() {
       )}
 
       {useModalOpen && selectedItem && (
-        <div
-          onClick={() => setUseModalOpen(false)}
-          className="modal-overlay"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="modal-panel"
-          >
-            <h3>Use — {selectedItem.product_name}</h3>
-
-            <input
-              type="number"
-              placeholder="Quantity"
-              value={useQty}
-              onChange={(e) => setUseQty(e.target.value)}
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
-
-            <input
-              placeholder="Job Name"
-              value={useJob}
-              onChange={(e) => setUseJob(e.target.value)}
-              style={{ width: "100%", marginBottom: "10px" }}
-            />
-
-            <div className="modal-actions">
-              <button onClick={() => setUseModalOpen(false)}>
-                Cancel
-              </button>
-
-              <button
-                onClick={async () => {
-                  const qty = Number(useQty)
-                  if (!qty || !useJob) {
-                    alert("Enter quantity and job")
-                    return
-                  }
-
-                  await useInventory(selectedItem.id, qty, useJob)
-
-                  setUseQty("")
-                  setUseJob("")
-                  setUseModalOpen(false)
-                }}
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
+        <UseInventoryModal
+          itemName={selectedItem.product_name}
+          onClose={() => setUseModalOpen(false)}
+          onConfirm={async ({ quantity, jobId, jobLabel }) => {
+            const error = await useInventory(selectedItem.id, quantity, jobId, jobLabel)
+            if (error) throw new Error(error)
+            setUseModalOpen(false)
+          }}
+        />
       )}
     </main>
   )
 }
-    
