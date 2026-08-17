@@ -102,7 +102,7 @@ export type AppearanceConfig = {
     card: {
       fieldOrder: InventoryCardFieldId[]
       /** Optional fields only; required fields cannot be listed. */
-      hiddenFields: InventoryCardFieldId[]
+      hiddenFields: OptionalInventoryCardFieldId[]
       /** Primary action-slot order (configurable slots, not save/cancel/releaseHold). */
       actionOrder: InventoryActionSlotId[]
       /** Overflow slots; disjoint from actionOrder; default empty. */

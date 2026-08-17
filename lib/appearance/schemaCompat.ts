@@ -29,7 +29,7 @@ function defaultResolution(
   reason: ResolvedAppearanceConfig["fallbackReason"],
 ): ResolvedAppearanceConfig {
   return {
-    config: cloneAppearanceConfig(DEFAULT_APPEARANCE_CONFIG as AppearanceConfig),
+    config: cloneAppearanceConfig(DEFAULT_APPEARANCE_CONFIG),
     source: "default",
     isUsingDefaults: true,
     fallbackReason: reason,

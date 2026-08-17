@@ -7,6 +7,7 @@ import {
   type AppearanceConfigSource,
 } from "../../lib/appearance"
 
+
 type AppearanceContextValue = {
   /** Active appearance configuration (compiled defaults in P3-1). */
   config: AppearanceConfig
@@ -31,7 +32,7 @@ const AppearanceContext = createContext<AppearanceContextValue | undefined>(unde
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppearanceContextValue>(
     () => ({
-      config: DEFAULT_APPEARANCE_CONFIG as AppearanceConfig,
+      config: DEFAULT_APPEARANCE_CONFIG,
       source: "default",
       isUsingDefaults: true,
       publishedConfig: null,

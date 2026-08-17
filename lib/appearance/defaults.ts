@@ -18,7 +18,7 @@ function deepFreeze<T>(value: T): T {
  * Matches current product chrome (title, nav, jobs tabs, inventory layout, tokens).
  * Frozen so consumers cannot mutate it by accident — use cloneAppearanceConfig for editors.
  */
-export const DEFAULT_APPEARANCE_CONFIG: Readonly<AppearanceConfig> = deepFreeze({
+export const DEFAULT_APPEARANCE_CONFIG: AppearanceConfig = deepFreeze({
   schemaVersion: APPEARANCE_SCHEMA_VERSION,
   branding: {
     appTitle: "Warehouse Inventory",
@@ -75,7 +75,7 @@ export const DEFAULT_APPEARANCE_CONFIG: Readonly<AppearanceConfig> = deepFreeze(
 
 /** Deep clone for mutable editor / draft state. Defaults to the compiled default. */
 export function cloneAppearanceConfig(
-  config: AppearanceConfig = DEFAULT_APPEARANCE_CONFIG as AppearanceConfig,
+  config: AppearanceConfig = DEFAULT_APPEARANCE_CONFIG,
 ): AppearanceConfig {
   return structuredClone(config)
 }

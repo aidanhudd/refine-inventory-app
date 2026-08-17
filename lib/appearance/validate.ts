@@ -23,6 +23,7 @@ import {
   type InventoryCardFieldId,
   type JobsViewMode,
   type NavItemId,
+  type OptionalInventoryCardFieldId,
 } from "./types"
 
 export type AppearanceValidationIssue = {
@@ -172,7 +173,7 @@ function validateActionPartitions(
 function validateHiddenFields(
   hiddenRaw: unknown,
   errors: AppearanceValidationIssue[],
-): InventoryCardFieldId[] | null {
+): OptionalInventoryCardFieldId[] | null {
   const path = "inventory.card.hiddenFields"
   if (!Array.isArray(hiddenRaw)) {
     errors.push({ path, message: "Must be an array." })
@@ -180,9 +181,8 @@ function validateHiddenFields(
   }
 
   const requiredSet = new Set<string>(REQUIRED_INVENTORY_CARD_FIELDS)
-  const optionalSet = new Set<string>(OPTIONAL_INVENTORY_CARD_FIELDS)
   const seen = new Set<string>()
-  const out: InventoryCardFieldId[] = []
+  const out: OptionalInventoryCardFieldId[] = []
   let ok = true
 
   for (let i = 0; i < hiddenRaw.length; i += 1) {
@@ -201,7 +201,7 @@ function validateHiddenFields(
       ok = false
       continue
     }
-    if (!optionalSet.has(entry)) {
+    if (!isOneOf(entry, OPTIONAL_INVENTORY_CARD_FIELDS)) {
       errors.push({
         path: entryPath,
         message: `Unknown or non-hideable field "${entry}".`,
@@ -215,10 +215,50 @@ function validateHiddenFields(
       continue
     }
     seen.add(entry)
-    out.push(entry as InventoryCardFieldId)
+    out.push(entry)
   }
 
   return ok ? out : null
+}
+
+/** Control chars / line breaks that must not appear in a single-line header title. */
+const APP_TITLE_UNSAFE_CHARS = /[\u0000-\u001F\u007F\u2028\u2029]/
+
+/**
+ * Trim, reject empty / overlong / unsafe titles, and return the normalized title.
+ * Callers keep React text escaping — this never interprets HTML.
+ */
+function normalizeAppTitle(
+  title: unknown,
+  errors: AppearanceValidationIssue[],
+): string | null {
+  const path = "branding.appTitle"
+  if (typeof title !== "string") {
+    errors.push({ path, message: "Must be a string." })
+    return null
+  }
+
+  const trimmed = title.trim()
+  if (trimmed.length === 0) {
+    errors.push({ path, message: "Must not be empty." })
+    return null
+  }
+  if (trimmed.length > APP_TITLE_MAX_LENGTH) {
+    errors.push({
+      path,
+      message: `Must be at most ${APP_TITLE_MAX_LENGTH} characters (got ${trimmed.length}).`,
+    })
+    return null
+  }
+  if (APP_TITLE_UNSAFE_CHARS.test(trimmed)) {
+    errors.push({
+      path,
+      message: "Must be a single line without control characters or line breaks.",
+    })
+    return null
+  }
+
+  return trimmed
 }
 
 /**
@@ -249,26 +289,14 @@ export function validateAppearanceConfigStrict(
   }
 
   // branding
+  let appTitle: string | null = null
   if (!isPlainObject(input.branding)) {
     errors.push({ path: "branding", message: "Must be an object." })
   } else {
     for (const key of unknownKeys(input.branding, ["appTitle"])) {
       errors.push({ path: `branding.${key}`, message: `Unknown key "${key}" is not allowed.` })
     }
-    const title = input.branding.appTitle
-    if (typeof title !== "string") {
-      errors.push({ path: "branding.appTitle", message: "Must be a string." })
-    } else {
-      const trimmed = title.trim()
-      if (trimmed.length === 0) {
-        errors.push({ path: "branding.appTitle", message: "Must not be empty." })
-      } else if (title.length > APP_TITLE_MAX_LENGTH) {
-        errors.push({
-          path: "branding.appTitle",
-          message: `Must be at most ${APP_TITLE_MAX_LENGTH} characters (got ${title.length}).`,
-        })
-      }
-    }
+    appTitle = normalizeAppTitle(input.branding.appTitle, errors)
   }
 
   // nav
@@ -472,8 +500,7 @@ export function validateAppearanceConfigStrict(
   }
 
   if (
-    !isPlainObject(input.branding) ||
-    typeof input.branding.appTitle !== "string" ||
+    !appTitle ||
     !navOrder ||
     !tabOrder ||
     !defaultTab ||
@@ -489,7 +516,7 @@ export function validateAppearanceConfigStrict(
 
   const config: AppearanceConfig = {
     schemaVersion: APPEARANCE_SCHEMA_VERSION,
-    branding: { appTitle: input.branding.appTitle },
+    branding: { appTitle },
     nav: { order: navOrder },
     jobs: { tabOrder, defaultTab },
     inventory: inventoryPartial,
@@ -567,5 +594,5 @@ export function validateAppearanceConfigLenient(
 export function appearanceConfigOrDefault(input: unknown): AppearanceConfig {
   const result = validateAppearanceConfigLenient(input)
   if (result.ok) return result.config
-  return cloneAppearanceConfig(DEFAULT_APPEARANCE_CONFIG as AppearanceConfig)
+  return cloneAppearanceConfig(DEFAULT_APPEARANCE_CONFIG)
 }
