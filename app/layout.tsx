@@ -1,4 +1,5 @@
 import './globals.css'
+import { AppearanceProvider } from './components/AppearanceProvider'
 import AppShell from './components/AppShell'
 import { AuthProvider } from './components/AuthProvider'
 import { HidePricesProvider } from './components/HidePricesProvider'
@@ -12,11 +13,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body>
-        <AuthProvider>
-          <HidePricesProvider>
-            <AppShell>{children}</AppShell>
-          </HidePricesProvider>
-        </AuthProvider>
+        <AppearanceProvider>
+          <AuthProvider>
+            <HidePricesProvider>
+              <AppShell>{children}</AppShell>
+            </HidePricesProvider>
+          </AuthProvider>
+        </AppearanceProvider>
       </body>
     </html>
   )
