@@ -65,3 +65,10 @@ export {
 } from "./applyAttributes"
 
 export { JOBS_TAB_REGISTRY, NAV_LINK_REGISTRY } from "./registries"
+
+export {
+  expandInventoryActionSlot,
+  expandInventoryActionSlots,
+  inventoryActionSlotHasVisibleActions,
+  type InventoryActionVisibilityState,
+} from "./expandActionSlots"

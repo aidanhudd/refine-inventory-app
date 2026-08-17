@@ -767,6 +767,7 @@ button:focus-visible {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 2px;
+  overflow: visible;
 }
 .category-grid-card-actions .btn-small {
   padding: 5px 8px;
@@ -1230,6 +1231,30 @@ button:focus-visible {
 .inventory-item-actions-file-input,
 .category-grid-card-file-input {
   display: none;
+}
+.inventory-more-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.inventory-more-actions-panel {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--bg) 55%, var(--card));
+}
+.category-grid-card-actions .inventory-more-actions {
+  flex: 1 1 100%;
+}
+.category-grid-card-actions .inventory-more-actions-panel {
+  position: relative;
+  z-index: 2;
 }
 .item-price-label {
   margin-top: 0;
