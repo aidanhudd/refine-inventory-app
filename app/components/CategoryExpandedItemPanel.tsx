@@ -8,6 +8,7 @@ import InventoryItemCard, {
   type InventoryItemCardSubcategory,
   type InventoryItemCardUsage,
 } from "./InventoryItemCard"
+import { Button } from "./ui"
 import { ChangeEvent } from "react"
 
 type CategoryExpandedItemPanelProps = {
@@ -61,9 +62,9 @@ export default function CategoryExpandedItemPanel({
   return (
     <div className="category-expanded-card">
       <div className="category-expanded-card-toolbar">
-        <button type="button" className="btn-secondary btn-small" onClick={onClose}>
+        <Button type="button" variant="secondary" size="sm" onClick={onClose}>
           Close
-        </button>
+        </Button>
       </div>
 
       <div className="category-expanded-layout">

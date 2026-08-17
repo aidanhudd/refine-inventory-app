@@ -1,8 +1,14 @@
 "use client"
 
-import { ChangeEvent, KeyboardEvent, MouseEvent, useRef } from "react"
+import { ChangeEvent, KeyboardEvent } from "react"
 import type { InventoryItemCardItem } from "./InventoryItemCard"
-import { categorySupportsDimensions, formatDimensionsSizeLine, formatDimensionsSquareFeetLine } from "../../lib/inventoryDimensions"
+import InventoryItemActions from "./InventoryItemActions"
+import { Badge } from "./ui"
+import {
+  categorySupportsDimensions,
+  formatDimensionsSizeLine,
+  formatDimensionsSquareFeetLine,
+} from "../../lib/inventoryDimensions"
 import { useHidePrices } from "./HidePricesProvider"
 import ItemHoldStatus from "./ItemHoldStatus"
 import { isItemOnHold } from "../../lib/itemHold"
@@ -24,10 +30,6 @@ type InventoryCategoryGridCardProps = {
   onUploadPhotos: (e: ChangeEvent<HTMLInputElement>) => void
 }
 
-const stopClick = (e: MouseEvent | KeyboardEvent) => {
-  e.stopPropagation()
-}
-
 export default function InventoryCategoryGridCard({
   item,
   categoryName,
@@ -45,7 +47,6 @@ export default function InventoryCategoryGridCard({
   onUploadPhotos,
 }: InventoryCategoryGridCardProps) {
   const { hidePrices } = useHidePrices()
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const primaryPhoto = photos[0]
   const statusLabel = (item.status || "active").replace(/_/g, " ")
   const qty = Number(item.quantity_on_hand || 0)
@@ -83,8 +84,8 @@ export default function InventoryCategoryGridCard({
         <h4 className="category-grid-card-name">{item.product_name || "Untitled Item"}</h4>
 
         <div className="category-grid-card-badges">
-          {categoryName && <span className="badge">{categoryName}</span>}
-          {subcategoryName && <span className="badge">{subcategoryName}</span>}
+          {categoryName && <Badge>{categoryName}</Badge>}
+          {subcategoryName && <Badge>{subcategoryName}</Badge>}
         </div>
 
         <dl className="category-grid-card-meta">
@@ -116,91 +117,25 @@ export default function InventoryCategoryGridCard({
           </div>
         )}
 
-        <div className="category-grid-card-actions" onClick={stopClick} onKeyDown={stopClick}>
-          <button
-            type="button"
-            className="btn-edit btn-small"
-            onClick={(e) => {
-              stopClick(e)
-              onStartEdit()
-            }}
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            className="btn-secondary btn-small"
-            onClick={(e) => {
-              stopClick(e)
-              onUse()
-            }}
-          >
-            Use
-          </button>
-          {itemOnHold ? (
-            <button
-              type="button"
-              className="btn-secondary btn-small"
-              onClick={(e) => {
-                stopClick(e)
-                onReleaseHold()
-              }}
-            >
-              Release
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn-secondary btn-small"
-              onClick={(e) => {
-                stopClick(e)
-                onHold()
-              }}
-            >
-              Hold
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn-secondary btn-small"
-            onClick={(e) => {
-              stopClick(e)
-              onMarkSold()
-            }}
-          >
-            Sold
-          </button>
-          <button
-            type="button"
-            className="btn-danger btn-small"
-            onClick={(e) => {
-              stopClick(e)
-              onDelete()
-            }}
-          >
-            Delete
-          </button>
-          <button
-            type="button"
-            className="btn-secondary btn-small"
-            disabled={isUploadingPhotos}
-            onClick={(e) => {
-              stopClick(e)
-              fileInputRef.current?.click()
-            }}
-          >
-            {isUploadingPhotos ? "Uploading…" : "Photo"}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*"
-            className="category-grid-card-file-input"
-            onChange={onUploadPhotos}
-            onClick={stopClick}
-          />
-        </div>
+        <InventoryItemActions
+          className="category-grid-card-actions"
+          labelMode="compact"
+          isInlineEditing={false}
+          itemOnHold={itemOnHold}
+          showSoldUndo={false}
+          isUploadingPhotos={isUploadingPhotos}
+          stopCardActivation
+          onEdit={onStartEdit}
+          onSave={() => undefined}
+          onCancel={() => undefined}
+          onUse={onUse}
+          onHold={onHold}
+          onReleaseHold={onReleaseHold}
+          onMarkSold={onMarkSold}
+          onUndoMarkSold={() => undefined}
+          onDelete={onDelete}
+          onUploadPhotos={onUploadPhotos}
+        />
       </div>
     </article>
   )
