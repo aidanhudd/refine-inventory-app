@@ -1634,6 +1634,9 @@ button:focus-visible {
   color: var(--primary-text);
   box-shadow: var(--btn-shadow);
 }
+:where(html, [data-appearance-scope])[data-button-style="solid"] .btn-primary:hover {
+  box-shadow: var(--btn-shadow-hover);
+}
 :where(html, [data-appearance-scope])[data-button-style="soft"] .btn-primary {
   background: color-mix(in srgb, var(--primary) 12%, var(--card));
   color: var(--primary);
@@ -1647,6 +1650,31 @@ button:focus-visible {
 :where(html, [data-appearance-scope])[data-button-style="soft"] .btn-secondary {
   background: color-mix(in srgb, var(--accent) 70%, var(--card));
   box-shadow: none;
+}
+
+/*
+ * Button interaction states — after style presets so focus-visible wins over
+ * solid/soft shadow rules, including when hovered.
+ */
+:where(html, [data-appearance-scope]) button:focus-visible,
+:where(html, [data-appearance-scope]) .btn-primary:focus-visible,
+:where(html, [data-appearance-scope]) .btn-primary:hover:focus-visible,
+:where(html, [data-appearance-scope]) .btn-secondary:focus-visible,
+:where(html, [data-appearance-scope]) .btn-secondary:hover:focus-visible,
+:where(html, [data-appearance-scope]) .btn-danger:focus-visible,
+:where(html, [data-appearance-scope]) .btn-danger:hover:focus-visible,
+:where(html, [data-appearance-scope]) .btn-edit:focus-visible,
+:where(html, [data-appearance-scope]) .btn-edit:hover:focus-visible,
+:where(html, [data-appearance-scope]) .btn-ghost:focus-visible,
+:where(html, [data-appearance-scope]) .btn-ghost:hover:focus-visible,
+:where(html, [data-appearance-scope])[data-button-style="solid"] .btn-primary:focus-visible,
+:where(html, [data-appearance-scope])[data-button-style="solid"] .btn-primary:hover:focus-visible,
+:where(html, [data-appearance-scope])[data-button-style="soft"] .btn-primary:focus-visible,
+:where(html, [data-appearance-scope])[data-button-style="soft"] .btn-primary:hover:focus-visible,
+:where(html, [data-appearance-scope])[data-button-style="soft"] .btn-secondary:focus-visible,
+:where(html, [data-appearance-scope])[data-button-style="soft"] .btn-secondary:hover:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
 
 /* ----- color-scheme property ----- */
