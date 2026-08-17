@@ -54,6 +54,7 @@ export {
 
 export {
   APPEARANCE_DATA_ATTR,
+  APPEARANCE_SCOPE_ATTR,
   appearanceConfigToDataAttributes,
   applyAppearanceAttributes,
   readAppearanceAttributeSnapshot,

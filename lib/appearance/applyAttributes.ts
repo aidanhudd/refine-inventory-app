@@ -20,6 +20,12 @@ export const APPEARANCE_DATA_ATTR = {
   gridColumns: "data-grid-columns",
 } as const
 
+/**
+ * Fixed marker for isolated appearance preview containers.
+ * Not configurable user data — application code only.
+ */
+export const APPEARANCE_SCOPE_ATTR = "data-appearance-scope" as const
+
 export type AppearanceDataAttrName =
   (typeof APPEARANCE_DATA_ATTR)[keyof typeof APPEARANCE_DATA_ATTR]
 
