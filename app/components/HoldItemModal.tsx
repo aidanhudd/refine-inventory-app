@@ -61,6 +61,13 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
     void loadData()
   }, [])
 
+  useEffect(() => {
+    if (!selectedJob) return
+    if (selectedCustomer && selectedJob.customer_id === selectedCustomer.id) return
+    setSelectedJob(null)
+    setJobQuery("")
+  }, [selectedCustomer, selectedJob])
+
   const loadData = async () => {
     setLoading(true)
     setLoadError("")
@@ -117,10 +124,7 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
     setSelectedCustomer(customer)
     setCustomerQuery(customer.name)
     setShowCustomerResults(false)
-    if (nextStep === "hold") {
-      setSelectedJob(null)
-      setJobQuery("")
-    }
+    // selectedJob cleared by effect when customer_id mismatches; NewJobForm stays mounted
     setStep(nextStep)
   }
 
@@ -128,6 +132,15 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
     if (submitting) return
     if (!selectedCustomer) {
       setFormError("Select a customer.")
+      return
+    }
+
+    if (selectedJob && selectedJob.customer_id !== selectedCustomer.id) {
+      setSelectedJob(null)
+      setJobQuery("")
+      setFormError(
+        "The selected job does not belong to this customer. Choose a matching job or place a customer-only hold.",
+      )
       return
     }
 

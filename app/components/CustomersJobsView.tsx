@@ -357,6 +357,34 @@ export default function CustomersJobsView({
     onMessage("Customer deleted.")
   }
 
+  const handleSelectExistingCustomer = (customer: Customer, context: "add-customer" | "add-job") => {
+    if (!isCustomerActive(customer)) {
+      setIncludeArchived(true)
+      setExpandedCustomerIds((prev) => new Set(prev).add(customer.id))
+      if (context === "add-job") {
+        setCreatingCustomerFromJob(false)
+      } else {
+        closeCreatePanels()
+      }
+      onError(
+        `"${customer.name}" is archived. A manager must reopen it before it can be used for new jobs.`,
+      )
+      return
+    }
+
+    if (context === "add-customer") {
+      setExpandedCustomerIds((prev) => new Set(prev).add(customer.id))
+      closeCreatePanels()
+      onMessage(`Selected existing customer ${customer.name}.`)
+      return
+    }
+
+    setSelectedCreateCustomer(customer)
+    setCreateCustomerQuery(customer.name)
+    setShowCreateCustomerResults(false)
+    setCreatingCustomerFromJob(false)
+  }
+
   const usageForJob = (jobId: string) => usage.filter((u) => u.job_id === jobId)
 
   const handleJobCreated = (job: JobWithCustomer) => {
@@ -418,10 +446,7 @@ export default function CustomersJobsView({
             setCreatingCustomerFromJob(false)
           }}
           onSelectExisting={(customer) => {
-            setSelectedCreateCustomer(customer)
-            setCreateCustomerQuery(customer.name)
-            setShowCreateCustomerResults(false)
-            setCreatingCustomerFromJob(false)
+            handleSelectExistingCustomer(customer, "add-job")
           }}
           onError={onError}
         />
@@ -483,9 +508,7 @@ export default function CustomersJobsView({
               onMessage("Customer created.")
             }}
             onSelectExisting={(customer) => {
-              setExpandedCustomerIds((prev) => new Set(prev).add(customer.id))
-              closeCreatePanels()
-              onMessage(`Selected existing customer ${customer.name}.`)
+              handleSelectExistingCustomer(customer, "add-customer")
             }}
             onError={onError}
           />
