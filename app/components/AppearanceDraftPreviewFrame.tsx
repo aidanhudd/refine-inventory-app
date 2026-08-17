@@ -205,6 +205,7 @@ export default function AppearanceDraftPreviewFrame({
           <h3 className="appearance-preview-section-title">Jobs</h3>
           <ViewToggle
             ariaLabel="Preview jobs tabs"
+            focusable={false}
             options={jobTabs.map((id) => ({
               id,
               label: JOBS_TAB_REGISTRY[id].label,

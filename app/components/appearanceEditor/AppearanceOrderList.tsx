@@ -24,7 +24,7 @@ type AppearanceOrderListProps<T extends string> = {
 
 /**
  * Accessible Move Up / Move Down order editor (no drag-and-drop).
- * Keeps focus on the control that performed the move and announces via a live region.
+ * Keeps focus on an enabled move control for the moved item and announces via a live region.
  */
 export default function AppearanceOrderList<T extends string>({
   items,
@@ -35,6 +35,7 @@ export default function AppearanceOrderList<T extends string>({
 }: AppearanceOrderListProps<T>) {
   const liveId = useId()
   const [announcement, setAnnouncement] = useState("")
+  const [announceTick, setAnnounceTick] = useState(0)
   const buttonRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
   const pendingFocusRef = useRef<{ id: T; direction: ReorderDirection } | null>(null)
 
@@ -44,10 +45,20 @@ export default function AppearanceOrderList<T extends string>({
   useEffect(() => {
     const pending = pendingFocusRef.current
     if (!pending) return
-    const key = `${pending.id}:${pending.direction}`
-    const node = buttonRefs.current.get(key)
-    node?.focus()
     pendingFocusRef.current = null
+
+    const preferredKey = `${pending.id}:${pending.direction}`
+    const preferred = buttonRefs.current.get(preferredKey)
+    if (preferred && !preferred.disabled) {
+      preferred.focus()
+      return
+    }
+
+    const opposite: ReorderDirection = pending.direction === "up" ? "down" : "up"
+    const fallback = buttonRefs.current.get(`${pending.id}:${opposite}`)
+    if (fallback && !fallback.disabled) {
+      fallback.focus()
+    }
   }, [order])
 
   const move = (id: T, direction: ReorderDirection) => {
@@ -56,11 +67,15 @@ export default function AppearanceOrderList<T extends string>({
     if (!canMoveOrderItem(orderedIds.length, index, direction)) return
 
     const next = moveOrderItemById(orderedIds, id, direction)
+    const newIndex = next.indexOf(id)
     const label = labelById.get(id) || id
-    const verb = direction === "up" ? "up" : "down"
     pendingFocusRef.current = { id, direction }
     onReorder(next)
-    setAnnouncement(`Moved ${label} ${verb}.`)
+    // Remount the live region so repeated identical moves still announce.
+    setAnnounceTick((tick) => tick + 1)
+    setAnnouncement(
+      `Moved ${label} to position ${newIndex + 1} of ${next.length}.`,
+    )
   }
 
   return (
@@ -116,7 +131,13 @@ export default function AppearanceOrderList<T extends string>({
           )
         })}
       </ol>
-      <div id={liveId} className="sr-only" aria-live="polite" aria-atomic="true">
+      <div
+        key={`${liveId}-${announceTick}`}
+        id={liveId}
+        className="sr-only"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         {announcement}
       </div>
     </div>

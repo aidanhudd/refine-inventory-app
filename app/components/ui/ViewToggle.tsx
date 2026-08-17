@@ -9,9 +9,19 @@ type ViewToggleProps = {
   options: ViewToggleOption[]
   ariaLabel: string
   className?: string
+  /**
+   * When false, options stay visible for preview/mock UI but are removed from
+   * keyboard navigation and do not receive clicks. Defaults to true.
+   */
+  focusable?: boolean
 }
 
-export default function ViewToggle({ options, ariaLabel, className = "" }: ViewToggleProps) {
+export default function ViewToggle({
+  options,
+  ariaLabel,
+  className = "",
+  focusable = true,
+}: ViewToggleProps) {
   return (
     <div
       className={["toolbar-view-toggle", className].filter(Boolean).join(" ")}
@@ -23,8 +33,10 @@ export default function ViewToggle({ options, ariaLabel, className = "" }: ViewT
           key={option.id}
           type="button"
           className={`toolbar-view-btn ${option.active ? "toolbar-view-btn-active" : ""}`}
-          onClick={option.onSelect}
+          onClick={focusable ? option.onSelect : undefined}
           aria-pressed={option.active}
+          tabIndex={focusable ? undefined : -1}
+          aria-disabled={focusable ? undefined : true}
         >
           {option.label}
         </button>
