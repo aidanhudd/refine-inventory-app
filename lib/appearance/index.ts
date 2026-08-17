@@ -84,3 +84,10 @@ export {
   type CompactCardFieldId,
   type ResolveInventoryFieldsOptions,
 } from "./inventoryFields"
+
+export {
+  canMoveOrderItem,
+  moveItemInOrder,
+  moveOrderItemById,
+  type ReorderDirection,
+} from "./reorder"

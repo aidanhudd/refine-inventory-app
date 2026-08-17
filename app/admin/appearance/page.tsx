@@ -6,26 +6,24 @@ import AppearanceDraftPreviewFrame, {
   type AppearancePreviewWidth,
 } from "../../components/AppearanceDraftPreviewFrame"
 import { AppearanceDraftPreviewProvider } from "../../components/AppearanceDraftPreviewProvider"
+import AppearanceBrandingControls from "../../components/appearanceEditor/AppearanceBrandingControls"
+import AppearanceInventoryLayoutControls from "../../components/appearanceEditor/AppearanceInventoryLayoutControls"
+import AppearanceJobsControls from "../../components/appearanceEditor/AppearanceJobsControls"
+import AppearanceNavControls from "../../components/appearanceEditor/AppearanceNavControls"
+import AppearanceThemeControls from "../../components/appearanceEditor/AppearanceThemeControls"
 import { useAuth } from "../../components/AuthProvider"
 import { Button, Notice, PageHeader, ViewToggle } from "../../components/ui"
 import {
   APP_TITLE_MAX_LENGTH,
-  BUTTON_STYLE_IDS,
-  COLOR_SCHEME_PREFERENCES,
-  DENSITY_PRESETS,
-  SPACING_PRESET_IDS,
-  THEME_PRESET_IDS,
-  TYPE_SCALE_IDS,
   cloneAppearanceConfig,
   validateAppearanceConfigStrict,
   type AppearanceConfig,
   type AppearanceValidationIssue,
-  type ButtonStyleId,
-  type ColorSchemePreference,
-  type DensityPreset,
-  type SpacingPresetId,
-  type ThemePresetId,
-  type TypeScaleId,
+  type DetailPresentation,
+  type GridColumnsPreset,
+  type InventoryViewMode,
+  type JobsViewMode,
+  type NavItemId,
 } from "../../../lib/appearance"
 import {
   getAppearanceDraft,
@@ -280,7 +278,6 @@ export default function AdminAppearancePage() {
 
     if (requestId !== saveRequestIdRef.current) return
     if (identityForSave !== adminIdentityKeyRef.current) return
-    // Defense in depth: ignore if the in-memory draft diverged from the save snapshot.
     if (saveSnapshotRef.current !== snapshot) return
 
     if (result.status === "saved") {
@@ -331,8 +328,9 @@ export default function AdminAppearancePage() {
           description="Draft only — changes are not live until published."
         />
         <p className="subtext">
-          Edit branding and theme for a private admin draft. The live app keeps its current
-          published or default appearance until a future publish step.
+          Edit branding, navigation, Jobs tabs, and inventory layout for a private admin draft.
+          The live app keeps its current published or default appearance until a future publish
+          step.
         </p>
         <div className="appearance-editor-status-row">
           <span className="appearance-editor-badge">Draft only</span>
@@ -366,195 +364,112 @@ export default function AdminAppearancePage() {
       ) : (
         <div className="appearance-editor-layout">
           <section className="card appearance-editor-controls" aria-label="Appearance draft controls">
-            <fieldset className="appearance-editor-fieldset" disabled={controlsDisabled}>
-              <legend>Branding</legend>
-              <div className="appearance-editor-field">
-                <label htmlFor="appearance-app-title">App title</label>
-                <input
-                  id="appearance-app-title"
-                  className="inline-input"
-                  type="text"
-                  value={draft.branding.appTitle}
-                  maxLength={APP_TITLE_MAX_LENGTH + 8}
-                  autoComplete="off"
-                  onChange={(e) =>
-                    updateDraft((prev) => ({
-                      ...prev,
-                      branding: { ...prev.branding, appTitle: e.target.value },
-                    }))
+            <AppearanceBrandingControls
+              draft={draft}
+              titleError={titleError}
+              disabled={controlsDisabled}
+              onChangeTitle={(appTitle) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  branding: { ...prev.branding, appTitle },
+                }))
+              }
+            />
+
+            <AppearanceThemeControls
+              draft={draft}
+              disabled={controlsDisabled}
+              onChangeDensity={(density) => updateDraft((prev) => ({ ...prev, density }))}
+              onChangeColorPreset={(colorPreset) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  theme: { ...prev.theme, colorPreset },
+                }))
+              }
+              onChangeColorScheme={(colorScheme) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  theme: { ...prev.theme, colorScheme },
+                }))
+              }
+              onChangeTypeScale={(typeScale) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  theme: { ...prev.theme, typeScale },
+                }))
+              }
+              onChangeSpacing={(spacingPreset) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  theme: { ...prev.theme, spacingPreset },
+                }))
+              }
+              onChangeButtonStyle={(buttonStyle) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  theme: { ...prev.theme, buttonStyle },
+                }))
+              }
+            />
+
+            <AppearanceNavControls
+              draft={draft}
+              disabled={controlsDisabled}
+              onReorder={(order: NavItemId[]) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  nav: { ...prev.nav, order },
+                }))
+              }
+            />
+
+            <AppearanceJobsControls
+              draft={draft}
+              disabled={controlsDisabled}
+              onReorder={(tabOrder: JobsViewMode[]) =>
+                updateDraft((prev) => {
+                  const defaultTab = tabOrder.includes(prev.jobs.defaultTab)
+                    ? prev.jobs.defaultTab
+                    : tabOrder[0]
+                  return {
+                    ...prev,
+                    jobs: {
+                      tabOrder,
+                      defaultTab: defaultTab || prev.jobs.defaultTab,
+                    },
                   }
-                  aria-invalid={titleError ? true : undefined}
-                  aria-describedby={
-                    titleError ? "appearance-app-title-error" : "appearance-app-title-hint"
-                  }
-                />
-                <p id="appearance-app-title-hint" className="small">
-                  1–{APP_TITLE_MAX_LENGTH} characters. Trimmed on save; single line only.
-                </p>
-                {titleError && (
-                  <p id="appearance-app-title-error" className="appearance-editor-field-error">
-                    {titleError}
-                  </p>
-                )}
-              </div>
-            </fieldset>
+                })
+              }
+              onChangeDefaultTab={(defaultTab: JobsViewMode) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  jobs: { ...prev.jobs, defaultTab },
+                }))
+              }
+            />
 
-            <fieldset className="appearance-editor-fieldset" disabled={controlsDisabled}>
-              <legend>Theme and density</legend>
-
-              <div className="appearance-editor-field">
-                <label htmlFor="appearance-density">Density</label>
-                <select
-                  id="appearance-density"
-                  className="inline-input"
-                  value={draft.density}
-                  onChange={(e) => {
-                    const value = e.target.value as DensityPreset
-                    if (!(DENSITY_PRESETS as readonly string[]).includes(value)) return
-                    updateDraft((prev) => ({ ...prev, density: value }))
-                  }}
-                >
-                  <option value="compact">Compact</option>
-                  <option value="comfortable">Comfortable</option>
-                  <option value="spacious">Spacious</option>
-                </select>
-              </div>
-
-              <div className="appearance-editor-field">
-                <label htmlFor="appearance-color-preset">Color preset</label>
-                <select
-                  id="appearance-color-preset"
-                  className="inline-input"
-                  value={draft.theme.colorPreset}
-                  onChange={(e) => {
-                    const value = e.target.value as ThemePresetId
-                    if (!(THEME_PRESET_IDS as readonly string[]).includes(value)) return
-                    updateDraft((prev) => ({
-                      ...prev,
-                      theme: { ...prev.theme, colorPreset: value },
-                    }))
-                  }}
-                >
-                  <option value="systemDefault">System Default</option>
-                  <option value="slate">Slate</option>
-                  <option value="ocean">Ocean</option>
-                </select>
-              </div>
-
-              <div className="appearance-editor-field">
-                <span className="appearance-editor-label" id="appearance-color-scheme-label">
-                  Color scheme
-                </span>
-                <div
-                  className="appearance-editor-radio-row"
-                  role="radiogroup"
-                  aria-labelledby="appearance-color-scheme-label"
-                >
-                  {(
-                    [
-                      ["system", "System"],
-                      ["light", "Light"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <label key={value} className="appearance-editor-radio">
-                      <input
-                        type="radio"
-                        name="appearance-color-scheme"
-                        value={value}
-                        checked={draft.theme.colorScheme === value}
-                        onChange={() => {
-                          const next = value as ColorSchemePreference
-                          if (!(COLOR_SCHEME_PREFERENCES as readonly string[]).includes(next)) return
-                          updateDraft((prev) => ({
-                            ...prev,
-                            theme: { ...prev.theme, colorScheme: next },
-                          }))
-                        }}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="appearance-editor-field">
-                <label htmlFor="appearance-type-scale">Type scale</label>
-                <select
-                  id="appearance-type-scale"
-                  className="inline-input"
-                  value={draft.theme.typeScale}
-                  onChange={(e) => {
-                    const value = e.target.value as TypeScaleId
-                    if (!(TYPE_SCALE_IDS as readonly string[]).includes(value)) return
-                    updateDraft((prev) => ({
-                      ...prev,
-                      theme: { ...prev.theme, typeScale: value },
-                    }))
-                  }}
-                >
-                  <option value="sm">Small</option>
-                  <option value="md">Medium</option>
-                  <option value="lg">Large</option>
-                </select>
-              </div>
-
-              <div className="appearance-editor-field">
-                <label htmlFor="appearance-spacing">Spacing</label>
-                <select
-                  id="appearance-spacing"
-                  className="inline-input"
-                  value={draft.theme.spacingPreset}
-                  onChange={(e) => {
-                    const value = e.target.value as SpacingPresetId
-                    if (!(SPACING_PRESET_IDS as readonly string[]).includes(value)) return
-                    updateDraft((prev) => ({
-                      ...prev,
-                      theme: { ...prev.theme, spacingPreset: value },
-                    }))
-                  }}
-                >
-                  <option value="tight">Tight</option>
-                  <option value="normal">Normal</option>
-                  <option value="relaxed">Relaxed</option>
-                </select>
-              </div>
-
-              <div className="appearance-editor-field">
-                <span className="appearance-editor-label" id="appearance-button-style-label">
-                  Button style
-                </span>
-                <div
-                  className="appearance-editor-radio-row"
-                  role="radiogroup"
-                  aria-labelledby="appearance-button-style-label"
-                >
-                  {(
-                    [
-                      ["solid", "Solid"],
-                      ["soft", "Soft"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <label key={value} className="appearance-editor-radio">
-                      <input
-                        type="radio"
-                        name="appearance-button-style"
-                        value={value}
-                        checked={draft.theme.buttonStyle === value}
-                        onChange={() => {
-                          const next = value as ButtonStyleId
-                          if (!(BUTTON_STYLE_IDS as readonly string[]).includes(next)) return
-                          updateDraft((prev) => ({
-                            ...prev,
-                            theme: { ...prev.theme, buttonStyle: next },
-                          }))
-                        }}
-                      />
-                      {label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </fieldset>
+            <AppearanceInventoryLayoutControls
+              draft={draft}
+              disabled={controlsDisabled}
+              onChangeDefaultView={(defaultView: InventoryViewMode) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  inventory: { ...prev.inventory, defaultView },
+                }))
+              }
+              onChangeDetailPresentation={(detailPresentation: DetailPresentation) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  inventory: { ...prev.inventory, detailPresentation },
+                }))
+              }
+              onChangeGridColumns={(gridColumns: GridColumnsPreset) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  inventory: { ...prev.inventory, gridColumns },
+                }))
+              }
+            />
           </section>
 
           <section className="card appearance-editor-preview-panel" aria-label="Draft preview">

@@ -20,6 +20,84 @@ function noop(event: { preventDefault(): void; stopPropagation(): void }) {
   event.stopPropagation()
 }
 
+const MOCK_CATEGORY_CARDS = [
+  { name: "Sample wall cabinet", qty: "12 ea", price: "$84.00" },
+  { name: "Sample vanity top", qty: "4 ea", price: "$220.00" },
+  { name: "Sample soft-close hinge", qty: "48 ea", price: "$6.50" },
+] as const
+
+function PreviewListCard() {
+  return (
+    <article className="appearance-preview-card item-card">
+      <div className="appearance-preview-card-top">
+        <Badge>Cabinetry</Badge>
+        <Badge>Soft-close</Badge>
+      </div>
+      <h3 className="appearance-preview-card-name">Sample wall cabinet</h3>
+      <dl className="appearance-preview-card-meta">
+        <div>
+          <dt>Qty</dt>
+          <dd>12 ea</dd>
+        </div>
+        <div>
+          <dt>Price</dt>
+          <dd>$84.00</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>active</dd>
+        </div>
+      </dl>
+      <p className="appearance-preview-card-notes">
+        Preview-only mock list card. No inventory data is loaded here.
+      </p>
+      <div className="appearance-preview-actions action-row">
+        <Button type="button" variant="edit" size="sm" tabIndex={-1} onClick={noop}>
+          Edit
+        </Button>
+        <Button type="button" variant="primary" size="sm" tabIndex={-1} onClick={noop}>
+          Use
+        </Button>
+        <Button type="button" variant="secondary" size="sm" tabIndex={-1} onClick={noop}>
+          Hold
+        </Button>
+        <Button type="button" variant="ghost" size="sm" tabIndex={-1} onClick={noop}>
+          More Actions
+        </Button>
+      </div>
+    </article>
+  )
+}
+
+function PreviewCompactCard({
+  name,
+  qty,
+  price,
+}: {
+  name: string
+  qty: string
+  price: string
+}) {
+  return (
+    <article className="appearance-preview-compact-card">
+      <div className="appearance-preview-compact-photo" aria-hidden="true" />
+      <h4 className="appearance-preview-compact-name">{name}</h4>
+      <div className="appearance-preview-compact-meta">
+        <span>{qty}</span>
+        <span>{price}</span>
+      </div>
+      <div className="appearance-preview-compact-actions">
+        <Button type="button" variant="edit" size="sm" tabIndex={-1} onClick={noop}>
+          Edit
+        </Button>
+        <Button type="button" variant="primary" size="sm" tabIndex={-1} onClick={noop}>
+          Use
+        </Button>
+      </div>
+    </article>
+  )
+}
+
 /**
  * Mock-only appearance preview. Does not navigate, mutate data, or call real handlers.
  */
@@ -32,10 +110,16 @@ export default function AppearanceDraftPreviewFrame({
   const jobTabs = config.jobs.tabOrder.filter(
     (id): id is JobsViewMode => id in JOBS_TAB_REGISTRY,
   )
+  const isList = config.inventory.defaultView === "list"
+  const detailLabel =
+    config.inventory.detailPresentation === "modal"
+      ? "Item details open in a modal"
+      : "Item details expand inline"
 
   return (
     <div
       className={`appearance-preview-frame appearance-preview-frame-${widthMode}`}
+      data-preview-width={widthMode}
       aria-label="Appearance draft preview"
     >
       <div className="appearance-preview-chrome">
@@ -71,8 +155,23 @@ export default function AppearanceDraftPreviewFrame({
             onFocus={(e) => e.currentTarget.blur()}
           />
           <div className="appearance-preview-toolbar-actions">
-            <Button type="button" variant="secondary" size="sm" tabIndex={-1} onClick={noop}>
+            <Button
+              type="button"
+              variant={isList ? "primary" : "secondary"}
+              size="sm"
+              tabIndex={-1}
+              onClick={noop}
+            >
               List
+            </Button>
+            <Button
+              type="button"
+              variant={!isList ? "primary" : "secondary"}
+              size="sm"
+              tabIndex={-1}
+              onClick={noop}
+            >
+              Category
             </Button>
             <Button type="button" variant="primary" size="sm" tabIndex={-1} onClick={noop}>
               Add Inventory
@@ -80,44 +179,27 @@ export default function AppearanceDraftPreviewFrame({
           </div>
         </div>
 
-        <article className="appearance-preview-card item-card">
-          <div className="appearance-preview-card-top">
-            <Badge>Cabinetry</Badge>
-            <Badge>Soft-close</Badge>
+        <p className="appearance-preview-detail-note small">{detailLabel}</p>
+
+        {isList ? (
+          <PreviewListCard />
+        ) : (
+          <div
+            className="appearance-preview-category-grid"
+            data-preview-grid-columns={
+              widthMode === "mobile" ? "one" : config.inventory.gridColumns
+            }
+          >
+            {MOCK_CATEGORY_CARDS.map((card) => (
+              <PreviewCompactCard
+                key={card.name}
+                name={card.name}
+                qty={card.qty}
+                price={card.price}
+              />
+            ))}
           </div>
-          <h3 className="appearance-preview-card-name">Sample wall cabinet</h3>
-          <dl className="appearance-preview-card-meta">
-            <div>
-              <dt>Qty</dt>
-              <dd>12 ea</dd>
-            </div>
-            <div>
-              <dt>Price</dt>
-              <dd>$84.00</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>active</dd>
-            </div>
-          </dl>
-          <p className="appearance-preview-card-notes">
-            Preview-only mock item. No inventory data is loaded here.
-          </p>
-          <div className="appearance-preview-actions action-row">
-            <Button type="button" variant="edit" size="sm" tabIndex={-1} onClick={noop}>
-              Edit
-            </Button>
-            <Button type="button" variant="primary" size="sm" tabIndex={-1} onClick={noop}>
-              Use
-            </Button>
-            <Button type="button" variant="secondary" size="sm" tabIndex={-1} onClick={noop}>
-              Hold
-            </Button>
-            <Button type="button" variant="ghost" size="sm" tabIndex={-1} onClick={noop}>
-              More Actions
-            </Button>
-          </div>
-        </article>
+        )}
 
         <section className="appearance-preview-jobs" aria-label="Preview jobs tabs">
           <h3 className="appearance-preview-section-title">Jobs</h3>
