@@ -1,15 +1,17 @@
 "use client"
 
-import { createContext, useContext, useMemo, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react"
 import {
   DEFAULT_APPEARANCE_CONFIG,
+  applyAppearanceAttributes,
+  restoreAppearanceAttributes,
+  type AppearanceAttributeSnapshot,
   type AppearanceConfig,
   type AppearanceConfigSource,
 } from "../../lib/appearance"
 
-
 type AppearanceContextValue = {
-  /** Active appearance configuration (compiled defaults in P3-1). */
+  /** Active appearance configuration (compiled defaults until published load). */
   config: AppearanceConfig
   /** Where the active config came from. */
   source: AppearanceConfigSource
@@ -17,7 +19,7 @@ type AppearanceContextValue = {
   isUsingDefaults: boolean
   /**
    * Future published configuration once Supabase wiring lands.
-   * Always null in P3-1 (defaults-only provider).
+   * Always null while the provider remains defaults-only.
    */
   publishedConfig: AppearanceConfig | null
 }
@@ -25,9 +27,9 @@ type AppearanceContextValue = {
 const AppearanceContext = createContext<AppearanceContextValue | undefined>(undefined)
 
 /**
- * Defaults-only AppearanceProvider (P3-1).
- * Synchronously provides compiled defaults. Does not fetch Supabase, suspend, or
- * apply configurable DOM/CSS yet (no visible behavior change).
+ * Defaults-only AppearanceProvider (P3-2A).
+ * Synchronously provides compiled defaults, applies allowlisted data attributes
+ * to the document root, and never fetches Supabase or blocks render.
  */
 export function AppearanceProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AppearanceContextValue>(
@@ -39,6 +41,17 @@ export function AppearanceProvider({ children }: { children: ReactNode }) {
     }),
     [],
   )
+
+  useEffect(() => {
+    const root = document.documentElement
+    const snapshot: AppearanceAttributeSnapshot = applyAppearanceAttributes(
+      root,
+      value.config,
+    )
+    return () => {
+      restoreAppearanceAttributes(root, snapshot)
+    }
+  }, [value.config])
 
   return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>
 }

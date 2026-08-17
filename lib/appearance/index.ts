@@ -51,3 +51,16 @@ export {
   type AppearanceConfigSource,
   type ResolvedAppearanceConfig,
 } from "./schemaCompat"
+
+export {
+  APPEARANCE_DATA_ATTR,
+  appearanceConfigToDataAttributes,
+  applyAppearanceAttributes,
+  readAppearanceAttributeSnapshot,
+  restoreAppearanceAttributes,
+  type AppearanceAttributeSnapshot,
+  type AppearanceDataAttrName,
+  type AppearanceDataAttributes,
+} from "./applyAttributes"
+
+export { JOBS_TAB_REGISTRY, NAV_LINK_REGISTRY } from "./registries"

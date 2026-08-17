@@ -3,6 +3,7 @@
 import { useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import NavBar from "./NavBar"
+import { useAppearance } from "./AppearanceProvider"
 import { useAuth } from "./AuthProvider"
 import { hasAppAccess, isAdmin } from "../../lib/profiles"
 import { Button, Card, EmptyState, Notice } from "./ui"
@@ -11,6 +12,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const router = useRouter()
   const { user, profile, loading, authError } = useAuth()
+  const { config } = useAppearance()
 
   const isLoginRoute = pathname === "/login"
   const isPendingRoute = pathname === "/pending"
@@ -101,7 +103,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <div className="app-brand">
             <img src="/logo.png" alt="Refine Kitchen & Bath Logo" className="app-logo" />
             <div>
-              <h1 className="app-title">Warehouse Inventory</h1>
+              <h1 className="app-title">{config.branding.appTitle}</h1>
             </div>
           </div>
           <NavBar />

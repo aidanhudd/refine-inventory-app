@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { supabase } from "../../lib/supabaseClient"
 import { holdJobSublabel, isItemOnHold } from "../../lib/itemHold"
 import ItemHoldStatus from "../components/ItemHoldStatus"
 import CustomersJobsView from "../components/CustomersJobsView"
 import { useHidePrices } from "../components/HidePricesProvider"
+import { useAppearance } from "../components/AppearanceProvider"
 import { useAuth } from "../components/AuthProvider"
 import {
   CUSTOMER_SELECT,
@@ -25,6 +26,7 @@ import {
   type Job,
   type JobWithCustomer,
 } from "../../lib/customersJobs"
+import { JOBS_TAB_REGISTRY, type JobsViewMode } from "../../lib/appearance"
 import { EmptyState, FilterCheckbox, Notice, PageHeader, SearchField, Toolbar, ViewToggle } from "../components/ui"
 
 type UsageRow = {
@@ -50,8 +52,6 @@ type Item = {
   warehouse_location: string | null
 }
 
-type JobsViewMode = "usage" | "holds" | "customers"
-
 type HoldGroup = {
   key: string
   label: string
@@ -62,7 +62,9 @@ type HoldGroup = {
 export default function JobsPage() {
   const { hidePrices } = useHidePrices()
   const { user, profile } = useAuth()
-  const [viewMode, setViewMode] = useState<JobsViewMode>("customers")
+  const { config } = useAppearance()
+  const userSelectedTabRef = useRef(false)
+  const [viewMode, setViewModeState] = useState<JobsViewMode>(() => config.jobs.defaultTab)
   const [usage, setUsage] = useState<UsageRow[]>([])
   const [items, setItems] = useState<Item[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -74,6 +76,16 @@ export default function JobsPage() {
   const [undoingUsageId, setUndoingUsageId] = useState<string | null>(null)
   const [releasingHoldItemId, setReleasingHoldItemId] = useState<string | null>(null)
   const [updatingJobId, setUpdatingJobId] = useState<string | null>(null)
+
+  const setViewMode = (mode: JobsViewMode) => {
+    userSelectedTabRef.current = true
+    setViewModeState(mode)
+  }
+
+  useEffect(() => {
+    if (userSelectedTabRef.current) return
+    setViewModeState(config.jobs.defaultTab)
+  }, [config.jobs.defaultTab])
 
   useEffect(() => {
     void loadData()
@@ -375,26 +387,14 @@ export default function JobsPage() {
   const viewToggle = (
     <ViewToggle
       ariaLabel="Jobs page view"
-      options={[
-        {
-          id: "customers",
-          label: "Customers & Jobs",
-          active: viewMode === "customers",
-          onSelect: () => setViewMode("customers"),
-        },
-        {
-          id: "holds",
-          label: "Holds",
-          active: viewMode === "holds",
-          onSelect: () => setViewMode("holds"),
-        },
-        {
-          id: "usage",
-          label: "Job Usage",
-          active: viewMode === "usage",
-          onSelect: () => setViewMode("usage"),
-        },
-      ]}
+      options={config.jobs.tabOrder
+        .filter((id): id is JobsViewMode => id in JOBS_TAB_REGISTRY)
+        .map((id) => ({
+          id,
+          label: JOBS_TAB_REGISTRY[id].label,
+          active: viewMode === id,
+          onSelect: () => setViewMode(id),
+        }))}
     />
   )
 

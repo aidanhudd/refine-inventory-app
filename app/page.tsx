@@ -20,6 +20,8 @@ import {
 } from "../lib/inventoryDimensions"
 import { canUndoSharedUsage, formatPhase2Error } from "../lib/customersJobs"
 import { releaseItemHoldRpc } from "../lib/customerJobApi"
+import { type InventoryViewMode } from "../lib/appearance"
+import { useAppearance } from "./components/AppearanceProvider"
 import { Button, EmptyState, Notice, SearchField, Toolbar, ViewToggle } from "./components/ui"
 
 type Category = {
@@ -114,8 +116,6 @@ const SETTING_MATS_CATEGORY_NAME = "Setting Mats"
 const NEW_ITEM_DRAFT_ID = "__new-item__"
 const INVENTORY_VIEW_STORAGE_KEY = "inventory-view-mode"
 
-type InventoryViewMode = "list" | "category"
-
 type InventorySubcategoryGroup = {
   key: string
   name: string
@@ -209,6 +209,8 @@ const validateCategorySubcategory = (
 export default function Home() {
   const { user, profile } = useAuth()
   const { hidePrices } = useHidePrices()
+  const { config } = useAppearance()
+  const inventoryViewTouchedRef = useRef(false)
   const [items, setItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [subcategories, setSubcategories] = useState<Subcategory[]>([])
@@ -236,7 +238,9 @@ export default function Home() {
   const [soldUndoMap, setSoldUndoMap] = useState<Record<string, SoldUndoSnapshot>>({})
   const [undoingUsageId, setUndoingUsageId] = useState<string | null>(null)
   const [settingMatsBootstrapping, setSettingMatsBootstrapping] = useState(false)
-  const [inventoryViewMode, setInventoryViewMode] = useState<InventoryViewMode>("list")
+  const [inventoryViewMode, setInventoryViewMode] = useState<InventoryViewMode>(
+    () => config.inventory.defaultView,
+  )
   const [collapsedBrowseGroups, setCollapsedBrowseGroups] = useState<Set<string>>(() => new Set())
   const [categoryExpandedItemId, setCategoryExpandedItemId] = useState<string | null>(null)
   const inlineDraftRef = useRef<InlineEditForm | null>(null)
@@ -253,8 +257,17 @@ export default function Home() {
     const stored = safeGetItem("local", INVENTORY_VIEW_STORAGE_KEY)
     if (stored === "list" || stored === "category") {
       setInventoryViewMode(stored)
+      return
     }
+    setInventoryViewMode(config.inventory.defaultView)
   }, [])
+
+  useEffect(() => {
+    if (inventoryViewTouchedRef.current) return
+    const stored = safeGetItem("local", INVENTORY_VIEW_STORAGE_KEY)
+    if (stored === "list" || stored === "category") return
+    setInventoryViewMode(config.inventory.defaultView)
+  }, [config.inventory.defaultView])
 
   const loadAll = async () => {
     setLoading(true)
@@ -1135,6 +1148,7 @@ export default function Home() {
   }
 
   const setViewMode = (mode: InventoryViewMode) => {
+    inventoryViewTouchedRef.current = true
     setInventoryViewMode(mode)
     safeSetItem("local", INVENTORY_VIEW_STORAGE_KEY, mode)
     if (mode === "list") {
