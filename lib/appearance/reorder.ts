@@ -42,3 +42,38 @@ export function canMoveOrderItem(
   if (direction === "up") return index > 0
   return index < orderLength - 1
 }
+
+export type ActionPartitionDestination = "primary" | "more"
+
+/**
+ * Move one action slot between primary (`actionOrder`) and More Actions.
+ * Removes the id from both lists, then appends once to the destination.
+ */
+export function moveActionBetweenPartitions<T extends string>(
+  actionOrder: readonly T[],
+  moreActions: readonly T[],
+  id: T,
+  destination: ActionPartitionDestination,
+): { actionOrder: T[]; moreActions: T[] } {
+  const withoutId = (list: readonly T[]) => list.filter((entry) => entry !== id)
+  const nextPrimary = withoutId(actionOrder)
+  const nextMore = withoutId(moreActions)
+
+  if (destination === "primary") {
+    return { actionOrder: [...nextPrimary, id], moreActions: nextMore }
+  }
+  return { actionOrder: nextPrimary, moreActions: [...nextMore, id] }
+}
+
+/** Add or remove an optional field id from hiddenFields (once, no duplicates). */
+export function setOptionalFieldHidden<T extends string>(
+  hiddenFields: readonly T[],
+  id: T,
+  hidden: boolean,
+): T[] {
+  if (hidden) {
+    if (hiddenFields.includes(id)) return hiddenFields.slice()
+    return [...hiddenFields, id]
+  }
+  return hiddenFields.filter((entry) => entry !== id)
+}

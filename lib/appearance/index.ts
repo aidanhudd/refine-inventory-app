@@ -87,7 +87,15 @@ export {
 
 export {
   canMoveOrderItem,
+  moveActionBetweenPartitions,
   moveItemInOrder,
   moveOrderItemById,
+  setOptionalFieldHidden,
+  type ActionPartitionDestination,
   type ReorderDirection,
 } from "./reorder"
+
+export {
+  INVENTORY_ACTION_SLOT_LABELS,
+  INVENTORY_CARD_FIELD_LABELS,
+} from "./editorLabels"

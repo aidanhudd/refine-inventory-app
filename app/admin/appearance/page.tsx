@@ -7,6 +7,8 @@ import AppearanceDraftPreviewFrame, {
 } from "../../components/AppearanceDraftPreviewFrame"
 import { AppearanceDraftPreviewProvider } from "../../components/AppearanceDraftPreviewProvider"
 import AppearanceBrandingControls from "../../components/appearanceEditor/AppearanceBrandingControls"
+import AppearanceInventoryActionsControls from "../../components/appearanceEditor/AppearanceInventoryActionsControls"
+import AppearanceInventoryFieldsControls from "../../components/appearanceEditor/AppearanceInventoryFieldsControls"
 import AppearanceInventoryLayoutControls from "../../components/appearanceEditor/AppearanceInventoryLayoutControls"
 import AppearanceJobsControls from "../../components/appearanceEditor/AppearanceJobsControls"
 import AppearanceNavControls from "../../components/appearanceEditor/AppearanceNavControls"
@@ -21,9 +23,12 @@ import {
   type AppearanceValidationIssue,
   type DetailPresentation,
   type GridColumnsPreset,
+  type InventoryActionSlotId,
+  type InventoryCardFieldId,
   type InventoryViewMode,
   type JobsViewMode,
   type NavItemId,
+  type OptionalInventoryCardFieldId,
 } from "../../../lib/appearance"
 import {
   getAppearanceDraft,
@@ -467,6 +472,49 @@ export default function AdminAppearancePage() {
                 updateDraft((prev) => ({
                   ...prev,
                   inventory: { ...prev.inventory, gridColumns },
+                }))
+              }
+            />
+
+            <AppearanceInventoryFieldsControls
+              draft={draft}
+              disabled={controlsDisabled}
+              onChangeFieldOrder={(fieldOrder: InventoryCardFieldId[]) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  inventory: {
+                    ...prev.inventory,
+                    card: { ...prev.inventory.card, fieldOrder },
+                  },
+                }))
+              }
+              onChangeHiddenFields={(hiddenFields: OptionalInventoryCardFieldId[]) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  inventory: {
+                    ...prev.inventory,
+                    card: { ...prev.inventory.card, hiddenFields },
+                  },
+                }))
+              }
+            />
+
+            <AppearanceInventoryActionsControls
+              draft={draft}
+              disabled={controlsDisabled}
+              onChangeActionPartitions={({
+                actionOrder,
+                moreActions,
+              }: {
+                actionOrder: InventoryActionSlotId[]
+                moreActions: InventoryActionSlotId[]
+              }) =>
+                updateDraft((prev) => ({
+                  ...prev,
+                  inventory: {
+                    ...prev.inventory,
+                    card: { ...prev.inventory.card, actionOrder, moreActions },
+                  },
                 }))
               }
             />
