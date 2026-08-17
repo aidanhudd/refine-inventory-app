@@ -952,6 +952,24 @@ button:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--card-shadow);
 }
 .item-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.inventory-item-detail-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.inventory-field-product-name .item-name {
+  margin-bottom: 0;
+}
+.inventory-field-unit-cost .item-price {
+  text-align: left;
+}
+.inventory-field + .inventory-field-notes,
+.inventory-field + .inventory-field-createdAt,
+.inventory-field + .inventory-field-usageHistory,
+.inventory-field + .inventory-field-photos {
+  margin-top: var(--space-1);
+}
+
 .item-name { font-weight: 800; font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; margin-bottom: 4px; }
 .item-hold-status {
   display: inline-flex;

@@ -72,3 +72,15 @@ export {
   inventoryActionSlotHasVisibleActions,
   type InventoryActionVisibilityState,
 } from "./expandActionSlots"
+
+export {
+  COMPACT_CARD_FIELD_IDS,
+  EDITABLE_OPTIONAL_FIELDS_WHILE_EDITING,
+  isCompactCardFieldId,
+  isFieldConfiguredHidden,
+  isInventoryCardFieldId,
+  isRequiredInventoryCardField,
+  resolveVisibleInventoryFields,
+  type CompactCardFieldId,
+  type ResolveInventoryFieldsOptions,
+} from "./inventoryFields"
