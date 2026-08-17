@@ -7,7 +7,13 @@ type ToolbarProps = HTMLAttributes<HTMLDivElement> & {
 }
 
 export default function Toolbar({ children, sticky = false, className = "", ...rest }: ToolbarProps) {
-  const classes = [sticky ? "toolbar" : "ui-toolbar jobs-toolbar", className].filter(Boolean).join(" ")
+  const classes = [
+    "ui-toolbar",
+    sticky ? "toolbar" : "jobs-toolbar",
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ")
 
   return (
     <div className={classes} {...rest}>

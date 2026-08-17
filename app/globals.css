@@ -128,6 +128,7 @@ h3 { font-size: var(--text-xl); line-height: var(--leading-snug); }
 .nav-links { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 .nav-bar { display: grid; gap: var(--space-2); justify-items: end; }
 .nav-bar-meta { display: grid; gap: 6px; justify-items: end; }
+.nav-bar-meta .small { margin-top: 0; }
 .hide-prices-switch {
   display: inline-flex;
   align-items: center;
@@ -1096,7 +1097,6 @@ button:focus-visible {
   font-size: var(--text-base);
   margin-bottom: 14px;
 }
-.notice-success { /* alias used by Notice primitive */ }
 .page-header {
   display: grid;
   gap: var(--space-2);
@@ -1120,6 +1120,9 @@ button:focus-visible {
 .estimate-line-actions {
   justify-content: space-between;
   align-items: center;
+}
+.estimate-subtotal {
+  margin-top: var(--space-3);
 }
 .job-flow-lead {
   margin-bottom: var(--space-2);

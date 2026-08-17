@@ -125,7 +125,6 @@ export default function LoginPage() {
 
           <Button
             variant="secondary"
-            disabled={loading}
             onClick={() => {
               setMode((prev) => (prev === "signin" ? "signup" : "signin"))
               setErrorMessage("")
