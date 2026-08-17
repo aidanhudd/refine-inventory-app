@@ -1348,21 +1348,15 @@ export default function Home() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return
 
+      // Topmost layer only. Hold/Use own their Close/overlay + submitting guards —
+      // never force-close them from the page (would hide UI while a save continues).
       if (activeImage) {
         event.preventDefault()
         setActiveImage(null)
         return
       }
 
-      if (holdModalOpen) {
-        event.preventDefault()
-        setHoldModalOpen(false)
-        return
-      }
-
-      if (useModalOpen) {
-        event.preventDefault()
-        setUseModalOpen(false)
+      if (holdModalOpen || useModalOpen) {
         return
       }
 
