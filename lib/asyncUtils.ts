@@ -1,4 +1,6 @@
 const AUTH_INIT_TIMEOUT_MS = 12_000
+/** Short timeout for non-blocking published appearance loads. */
+const APPEARANCE_LOAD_TIMEOUT_MS = 8_000
 
 export async function withTimeout<T>(
   promise: PromiseLike<T>,
@@ -20,4 +22,4 @@ export async function withTimeout<T>(
   }
 }
 
-export { AUTH_INIT_TIMEOUT_MS }
+export { AUTH_INIT_TIMEOUT_MS, APPEARANCE_LOAD_TIMEOUT_MS }
