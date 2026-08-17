@@ -13,10 +13,12 @@ import AppearanceInventoryFieldsControls from "../../components/appearanceEditor
 import AppearanceInventoryLayoutControls from "../../components/appearanceEditor/AppearanceInventoryLayoutControls"
 import AppearanceJobsControls from "../../components/appearanceEditor/AppearanceJobsControls"
 import AppearanceNavControls from "../../components/appearanceEditor/AppearanceNavControls"
+import AppearancePublishControls from "../../components/appearanceEditor/AppearancePublishControls"
 import AppearanceThemeControls from "../../components/appearanceEditor/AppearanceThemeControls"
 import AppearanceVersionHistoryControls, {
   type AppearanceHistoryUiStatus,
 } from "../../components/appearanceEditor/AppearanceVersionHistoryControls"
+import { useAppearance } from "../../components/AppearanceProvider"
 import { useAuth } from "../../components/AuthProvider"
 import { Button, Notice, PageHeader, ViewToggle } from "../../components/ui"
 import {
@@ -37,6 +39,8 @@ import {
 import {
   getAppearanceDraft,
   listAppearanceVersions,
+  normalizeAppearancePublishLabel,
+  publishAppearanceDraft,
   resetAppearanceDraft,
   restoreAppearanceVersionToDraft,
   upsertAppearanceDraft,
@@ -44,8 +48,17 @@ import {
 } from "../../../lib/appearanceApi"
 import { isAdmin } from "../../../lib/profiles"
 
-type EditorStatus = "idle" | "loading" | "ready" | "saving" | "saved" | "error" | "resetting" | "restoring"
-type MutationKind = "save" | "reset" | "restore" | null
+type EditorStatus =
+  | "idle"
+  | "loading"
+  | "ready"
+  | "saving"
+  | "saved"
+  | "error"
+  | "resetting"
+  | "restoring"
+  | "publishing"
+type MutationKind = "save" | "reset" | "restore" | "publish" | null
 
 
 const APP_TITLE_UNSAFE = /[\u0000-\u001F\u007F\u2028\u2029]/
@@ -84,6 +97,11 @@ function resetEditorDefaults(): {
 
 export default function AdminAppearancePage() {
   const { user, profile, loading: authLoading } = useAuth()
+  const {
+    publishedVersionId: loadedPublishedVersionId,
+    publishedVersionNumber: loadedPublishedVersionNumber,
+    isUsingDefaults,
+  } = useAppearance()
 
   const adminIdentityKey =
     !authLoading &&
@@ -110,11 +128,18 @@ export default function AdminAppearancePage() {
   const [historyVersions, setHistoryVersions] = useState<AppearanceVersionHistoryEntry[]>([])
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null)
+  const [publishLabel, setPublishLabel] = useState("")
+  const [publishUncertain, setPublishUncertain] = useState(false)
+  const [sessionPublishedVersionId, setSessionPublishedVersionId] = useState<string | null>(null)
+  const [sessionPublishedVersionNumber, setSessionPublishedVersionNumber] = useState<bigint | null>(
+    null,
+  )
 
   const loadRequestIdRef = useRef(0)
   const saveRequestIdRef = useRef(0)
   const resetRequestIdRef = useRef(0)
   const restoreRequestIdRef = useRef(0)
+  const publishRequestIdRef = useRef(0)
   const historyRequestIdRef = useRef(0)
   const mutationKindRef = useRef<MutationKind>(null)
   const saveSnapshotRef = useRef<string | null>(null)
@@ -127,10 +152,12 @@ export default function AdminAppearancePage() {
 
   const strictValidation = useMemo(() => validateAppearanceConfigStrict(draft), [draft])
   const titleError = titleFieldError(draft.branding.appTitle)
+  const publishLabelCheck = normalizeAppearancePublishLabel(publishLabel)
   const mutationBusy =
     editorStatus === "saving" ||
     editorStatus === "resetting" ||
-    editorStatus === "restoring"
+    editorStatus === "restoring" ||
+    editorStatus === "publishing"
   const controlsDisabled = mutationBusy
   const canSave =
     !!adminIdentityKey &&
@@ -139,6 +166,29 @@ export default function AdminAppearancePage() {
     (dirty || !draftPersisted) &&
     strictValidation.ok &&
     !titleError
+  const canPublish =
+    !!adminIdentityKey &&
+    editorStatus !== "loading" &&
+    !mutationBusy &&
+    draftPersisted &&
+    !dirty &&
+    strictValidation.ok &&
+    !titleError &&
+    !publishUncertain &&
+    publishLabelCheck.ok
+
+  const publishedStatusText = useMemo(() => {
+    if (sessionPublishedVersionNumber != null) {
+      return `Version ${sessionPublishedVersionNumber.toString()} was published from this page. Refresh this tab and other open sessions to load it.`
+    }
+    if (loadedPublishedVersionNumber != null && !isUsingDefaults) {
+      return `Currently loaded published version: ${loadedPublishedVersionNumber.toString()}.`
+    }
+    if (loadedPublishedVersionNumber != null && isUsingDefaults) {
+      return `Published version ${loadedPublishedVersionNumber.toString()} exists, but this session is using compiled defaults.`
+    }
+    return "No published appearance version is loaded — this session is using compiled defaults."
+  }, [sessionPublishedVersionNumber, loadedPublishedVersionNumber, isUsingDefaults])
 
   const applyEditorReset = useCallback((status: EditorStatus = "idle") => {
     const next = resetEditorDefaults()
@@ -153,6 +203,9 @@ export default function AdminAppearancePage() {
     setHistoryVersions([])
     setHistoryError(null)
     setRestoringVersionId(null)
+    setPublishLabel("")
+    setSessionPublishedVersionId(null)
+    setSessionPublishedVersionNumber(null)
     setEditorStatus(status)
   }, [])
 
@@ -186,6 +239,7 @@ export default function AdminAppearancePage() {
       saveRequestIdRef.current += 1
       resetRequestIdRef.current += 1
       restoreRequestIdRef.current += 1
+      publishRequestIdRef.current += 1
       historyRequestIdRef.current += 1
       mutationKindRef.current = null
       saveSnapshotRef.current = null
@@ -482,6 +536,61 @@ export default function AdminAppearancePage() {
     setEditorStatus("error")
   }
 
+  const publishDraft = async () => {
+    if (!adminIdentityKey || !canPublish || mutationKindRef.current) return
+
+    const confirmed = window.confirm(
+      "Publish this appearance draft for all approved users? After they refresh, the company appearance will change. Inventory data, holds, jobs, estimates, and permissions will not be affected.",
+    )
+    if (!confirmed) return
+
+    const identityForPublish = adminIdentityKey
+    const requestId = ++publishRequestIdRef.current
+    mutationKindRef.current = "publish"
+    setEditorStatus("publishing")
+    setSaveMessage(null)
+    setSaveError(null)
+
+    const result = await publishAppearanceDraft(publishLabel)
+
+    if (mutationKindRef.current === "publish") {
+      mutationKindRef.current = null
+    }
+
+    if (requestId !== publishRequestIdRef.current) return
+    if (identityForPublish !== adminIdentityKeyRef.current) return
+
+    if (result.status === "published") {
+      setRestoredFromVersionId(null)
+      setSessionPublishedVersionId(result.versionId)
+      setSessionPublishedVersionNumber(result.versionNumber)
+      setPublishLabel("")
+      setSaveMessage(
+        `Version ${result.versionNumber.toString()} published successfully. Refresh this tab and other open sessions to load the published appearance.`,
+      )
+      setEditorStatus("ready")
+      void loadHistory()
+      return
+    }
+
+    if (result.status === "timeout") {
+      setPublishUncertain(true)
+      setSaveError(result.message)
+      setEditorStatus("error")
+      void loadHistory()
+      return
+    }
+
+    if (result.status === "validation") {
+      setSaveError(`${result.message} ${issueSummary(result.issues)}`)
+      setEditorStatus("error")
+      return
+    }
+
+    setSaveError(`Could not publish draft: ${result.message}`)
+    setEditorStatus("error")
+  }
+
   if (authLoading || !adminIdentityKey) {
     return (
       <main>
@@ -712,12 +821,27 @@ export default function AdminAppearancePage() {
               onReset={() => void resetDraftToDefaults()}
             />
 
+            <AppearancePublishControls
+              label={publishLabel}
+              onChangeLabel={setPublishLabel}
+              disabled={controlsDisabled}
+              publishing={editorStatus === "publishing"}
+              canPublish={canPublish}
+              dirty={dirty}
+              draftPersisted={draftPersisted}
+              publishUncertain={publishUncertain}
+              publishedStatusText={publishedStatusText}
+              onPublish={() => void publishDraft()}
+            />
+
             <AppearanceVersionHistoryControls
               status={historyStatus}
               versions={historyVersions}
               errorMessage={historyError}
               disabled={controlsDisabled}
               restoringVersionId={restoringVersionId}
+              loadedPublishedVersionId={loadedPublishedVersionId}
+              sessionPublishedVersionId={sessionPublishedVersionId}
               onRefresh={() => void loadHistory()}
               onRestore={(versionId) => void restoreVersionToDraft(versionId)}
             />

@@ -12,6 +12,10 @@ type AppearanceVersionHistoryControlsProps = {
   errorMessage: string | null
   disabled?: boolean
   restoringVersionId: string | null
+  /** Version currently applied by AppearanceProvider in this browser session. */
+  loadedPublishedVersionId?: string | null
+  /** Version published from this editor session (may not be applied until refresh). */
+  sessionPublishedVersionId?: string | null
   onRefresh: () => void
   onRestore: (versionId: string) => void
 }
@@ -41,6 +45,8 @@ export default function AppearanceVersionHistoryControls({
   errorMessage,
   disabled = false,
   restoringVersionId,
+  loadedPublishedVersionId = null,
+  sessionPublishedVersionId = null,
   onRefresh,
   onRestore,
 }: AppearanceVersionHistoryControlsProps) {
@@ -125,6 +131,15 @@ export default function AppearanceVersionHistoryControls({
                   <p className="small appearance-history-detail">
                     {formatCreatedAt(version.createdAt)} · {sourceLabel(version.source)}
                   </p>
+                  {loadedPublishedVersionId === version.id && (
+                    <p className="small appearance-history-badge">Loaded in this session</p>
+                  )}
+                  {sessionPublishedVersionId === version.id &&
+                    loadedPublishedVersionId !== version.id && (
+                      <p className="small appearance-history-badge">
+                        Published just now (refresh to apply)
+                      </p>
+                    )}
                   {!version.restorable && (
                     <p className="small appearance-history-unavailable">
                       Unavailable

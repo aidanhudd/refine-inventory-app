@@ -559,10 +559,16 @@ function appearanceErrorMessage(code: string | null, detail: string): string {
       return "You do not have permission to perform this appearance action."
     case "VERSION_NOT_FOUND":
       return "That appearance version was not found."
+    case "DRAFT_NOT_FOUND":
+      return "No private appearance draft exists to publish. Save Draft first."
+    case "INVALID_LABEL":
+      return detail || "Publish label is invalid."
     case "INVALID_CONFIG":
       return detail || "Appearance configuration is invalid."
     case "UNSUPPORTED_SCHEMA":
       return detail || "Appearance schema version is unsupported by this app build."
+    case "SETTINGS_NOT_FOUND":
+      return "Appearance settings are missing. Publishing cannot continue."
     default:
       return detail || "Appearance request failed."
   }
@@ -739,6 +745,157 @@ export async function restoreAppearanceVersionToDraft(
       error instanceof Error ? error.message : "Unknown appearance restore error"
     if (isTimeoutMessage(message)) {
       return { status: "timeout", message }
+    }
+    return { status: "error", message, code: null }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Publish (P3-5B) — never throws into React; does not duplicate server logic
+// ---------------------------------------------------------------------------
+
+export const APPEARANCE_PUBLISH_LABEL_MAX_LENGTH = 120
+
+const PUBLISH_LABEL_UNSAFE = /[\u0000-\u001F\u007F\u2028\u2029]/
+
+export type PublishAppearanceDraftResult =
+  | { status: "published"; versionId: string; versionNumber: bigint }
+  | {
+      status: "validation"
+      message: string
+      issues: AppearanceValidationIssue[]
+      code: string | null
+    }
+  | { status: "error"; message: string; code: string | null }
+  | { status: "timeout"; message: string }
+
+type PublishAppearanceRpcRow = {
+  version_id: unknown
+  version_number: unknown
+}
+
+/**
+ * Normalize an optional publish label for the RPC.
+ * Empty / whitespace-only → null. Does not throw.
+ */
+export function normalizeAppearancePublishLabel(label: string | null | undefined): {
+  ok: true
+  value: string | null
+} | {
+  ok: false
+  message: string
+} {
+  if (label == null) return { ok: true, value: null }
+  const trimmed = label.trim()
+  if (trimmed.length === 0) return { ok: true, value: null }
+  if (trimmed.length > APPEARANCE_PUBLISH_LABEL_MAX_LENGTH) {
+    return {
+      ok: false,
+      message: `Publish label must be at most ${APPEARANCE_PUBLISH_LABEL_MAX_LENGTH} characters.`,
+    }
+  }
+  if (PUBLISH_LABEL_UNSAFE.test(trimmed)) {
+    return {
+      ok: false,
+      message: "Publish label must be a single line without control characters or line breaks.",
+    }
+  }
+  return { ok: true, value: trimmed }
+}
+
+function mapPublishRow(data: PublishAppearanceRpcRow): {
+  versionId: string
+  versionNumber: bigint
+} | null {
+  if (typeof data.version_id !== "string" || data.version_id.length === 0) return null
+  const versionNumber = parseBigInt(data.version_number)
+  if (versionNumber === null) return null
+  return { versionId: data.version_id, versionNumber }
+}
+
+/**
+ * Publish the signed-in admin’s private draft to company appearance history.
+ * Never throws. A timeout means the outcome is uncertain (server may have succeeded).
+ */
+export async function publishAppearanceDraft(
+  label?: string | null,
+): Promise<PublishAppearanceDraftResult> {
+  const normalized = normalizeAppearancePublishLabel(label)
+  if (!normalized.ok) {
+    return {
+      status: "validation",
+      message: normalized.message,
+      issues: [{ path: "label", message: normalized.message }],
+      code: "INVALID_LABEL",
+    }
+  }
+
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .rpc("publish_appearance_draft", { p_label: normalized.value })
+        .maybeSingle(),
+      APPEARANCE_LOAD_TIMEOUT_MS,
+      "publish_appearance_draft",
+    )
+
+    if (error) {
+      const parsed = parseAppearanceRpcError(error.message)
+      if (
+        parsed.code === "INVALID_LABEL" ||
+        parsed.code === "INVALID_CONFIG" ||
+        parsed.code === "UNSUPPORTED_SCHEMA"
+      ) {
+        return {
+          status: "validation",
+          message: appearanceErrorMessage(parsed.code, parsed.detail),
+          issues: [
+            {
+              path: parsed.code === "INVALID_LABEL" ? "label" : parsed.path || "",
+              message: parsed.detail,
+            },
+          ],
+          code: parsed.code,
+        }
+      }
+      return {
+        status: "error",
+        message: appearanceErrorMessage(parsed.code, parsed.detail),
+        code: parsed.code,
+      }
+    }
+
+    if (!data) {
+      return {
+        status: "error",
+        message: "Publish appearance draft returned no version row.",
+        code: null,
+      }
+    }
+
+    const mapped = mapPublishRow(data as PublishAppearanceRpcRow)
+    if (!mapped) {
+      return {
+        status: "error",
+        message: "Publish appearance draft returned an unexpected shape.",
+        code: null,
+      }
+    }
+
+    return {
+      status: "published",
+      versionId: mapped.versionId,
+      versionNumber: mapped.versionNumber,
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown appearance publish error"
+    if (isTimeoutMessage(message)) {
+      return {
+        status: "timeout",
+        message:
+          "Publish timed out. The outcome is uncertain — the publish may have succeeded on the server. Reload this page and inspect version history before trying again.",
+      }
     }
     return { status: "error", message, code: null }
   }

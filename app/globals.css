@@ -1619,6 +1619,21 @@ button:focus-visible {
   color: var(--danger, #b42318);
   font-weight: 600;
 }
+.appearance-history-badge {
+  margin: 0;
+  color: var(--accent, #0f6e56);
+  font-weight: 600;
+}
+.appearance-publish-fieldset {
+  border-color: color-mix(in srgb, var(--accent, #0f6e56) 35%, var(--line));
+}
+.appearance-publish-status {
+  margin: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--line);
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+}
 .appearance-history-actions {
   display: flex;
   flex-wrap: wrap;
