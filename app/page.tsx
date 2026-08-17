@@ -8,6 +8,7 @@ import { useHidePrices } from "./components/HidePricesProvider"
 import InventoryItemCard from "./components/InventoryItemCard"
 import InventoryCategoryGridCard from "./components/InventoryCategoryGridCard"
 import CategoryExpandedItemPanel from "./components/CategoryExpandedItemPanel"
+import CategoryItemDetailModal from "./components/CategoryItemDetailModal"
 import UseInventoryModal from "./components/UseInventoryModal"
 import HoldItemModal from "./components/HoldItemModal"
 import ItemDimensionsFields from "./components/ItemDimensionsFields"
@@ -211,6 +212,8 @@ export default function Home() {
   const { hidePrices } = useHidePrices()
   const { config } = useAppearance()
   const inventoryViewTouchedRef = useRef(false)
+  const categoryCardRefs = useRef<Map<string, HTMLElement>>(new Map())
+  const categoryDetailReturnFocusIdRef = useRef<string | null>(null)
   const [items, setItems] = useState<InventoryItem[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [subcategories, setSubcategories] = useState<Subcategory[]>([])
@@ -394,6 +397,9 @@ export default function Home() {
 
   const isAddingNew = inlineEditingId === NEW_ITEM_DRAFT_ID && !!inlineDraft
   const isCategoryView = inventoryViewMode === "category"
+  const detailPresentation = config.inventory.detailPresentation
+  const isCategoryModalPresentation = isCategoryView && detailPresentation === "modal"
+  const isCategoryExpandPresentation = isCategoryView && detailPresentation === "expand"
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -499,9 +505,13 @@ export default function Home() {
 
   useEffect(() => {
     if (categoryExpandedItemId && !filteredItems.some((item) => item.id === categoryExpandedItemId)) {
+      if (inlineEditingId === categoryExpandedItemId) {
+        cancelInlineEdit()
+      }
       setCategoryExpandedItemId(null)
+      categoryDetailReturnFocusIdRef.current = null
     }
-  }, [filteredItems, categoryExpandedItemId])
+  }, [filteredItems, categoryExpandedItemId, inlineEditingId])
 
   const hasSelectedInventoryView = useMemo(() => {
     if (categoryFilter === "all") return true
@@ -843,6 +853,7 @@ export default function Home() {
 
     if (categoryExpandedItemId === id) {
       setCategoryExpandedItemId(null)
+      categoryDetailReturnFocusIdRef.current = null
     }
 
     setMessage("Item deleted.")
@@ -1153,10 +1164,25 @@ export default function Home() {
     safeSetItem("local", INVENTORY_VIEW_STORAGE_KEY, mode)
     if (mode === "list") {
       setCategoryExpandedItemId(null)
+      categoryDetailReturnFocusIdRef.current = null
     }
   }
 
+  const restoreCategoryCardFocus = (itemId: string | null) => {
+    if (!itemId) return
+    const node = categoryCardRefs.current.get(itemId)
+    if (node) {
+      node.focus()
+      return
+    }
+    const fallback = document.querySelector<HTMLElement>(
+      `[data-inventory-item-id="${CSS.escape(itemId)}"]`,
+    )
+    fallback?.focus()
+  }
+
   const openCategoryItemDetail = (itemId: string) => {
+    categoryDetailReturnFocusIdRef.current = itemId
     setCategoryExpandedItemId(itemId)
   }
 
@@ -1165,8 +1191,15 @@ export default function Home() {
   }
 
   const handleCloseCategoryItem = () => {
+    if (inlineSaving) return
+    const returnFocusId =
+      categoryDetailReturnFocusIdRef.current || categoryExpandedItemId
     cancelInlineEdit()
     closeCategoryItemDetail()
+    categoryDetailReturnFocusIdRef.current = null
+    if (detailPresentation === "modal") {
+      requestAnimationFrame(() => restoreCategoryCardFocus(returnFocusId))
+    }
   }
 
   const startCategoryInlineEdit = (item: InventoryItem) => {
@@ -1258,7 +1291,8 @@ export default function Home() {
     const subcategoryName = item.subcategory_id ? subcategoryNameById.get(item.subcategory_id) || "" : ""
     const photos = photoMap[item.id] || []
 
-    if (isExpanded || isInlineEditing) {
+    // Expand presentation: replace the compact card with an inline full-width panel.
+    if (isCategoryExpandPresentation && (isExpanded || isInlineEditing)) {
       const cardProps = buildInventoryItemCardProps(item)
 
       return (
@@ -1274,9 +1308,14 @@ export default function Home() {
       )
     }
 
+    // Modal presentation keeps every compact card in the grid; details render once outside.
     return (
       <InventoryCategoryGridCard
         key={item.id}
+        ref={(node) => {
+          if (node) categoryCardRefs.current.set(item.id, node)
+          else categoryCardRefs.current.delete(item.id)
+        }}
         item={item}
         categoryName={categoryName}
         subcategoryName={subcategoryName}
@@ -1297,6 +1336,52 @@ export default function Home() {
       />
     )
   }
+
+  const categoryModalItem =
+    isCategoryModalPresentation && categoryExpandedItemId
+      ? filteredItems.find((item) => item.id === categoryExpandedItemId) || null
+      : null
+
+  const categoryNestedLayerActive = !!(activeImage || holdModalOpen || useModalOpen)
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+
+      if (activeImage) {
+        event.preventDefault()
+        setActiveImage(null)
+        return
+      }
+
+      if (holdModalOpen) {
+        event.preventDefault()
+        setHoldModalOpen(false)
+        return
+      }
+
+      if (useModalOpen) {
+        event.preventDefault()
+        setUseModalOpen(false)
+        return
+      }
+
+      if (isCategoryModalPresentation && categoryExpandedItemId && !inlineSaving) {
+        event.preventDefault()
+        handleCloseCategoryItem()
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [
+    activeImage,
+    holdModalOpen,
+    useModalOpen,
+    isCategoryModalPresentation,
+    categoryExpandedItemId,
+    inlineSaving,
+  ])
 
   return (
   <main>
@@ -1701,6 +1786,31 @@ export default function Home() {
           )}
       </section>
 
+      {categoryModalItem && (
+        <CategoryItemDetailModal
+          open
+          nestedLayerActive={categoryNestedLayerActive}
+          inlineSaving={inlineSaving}
+          onClose={handleCloseCategoryItem}
+        >
+          <CategoryExpandedItemPanel
+            {...buildInventoryItemCardProps(categoryModalItem)}
+            photos={photoMap[categoryModalItem.id] || []}
+            categoryName={
+              categoryModalItem.category_id
+                ? categoryNameById.get(categoryModalItem.category_id) || ""
+                : ""
+            }
+            subcategoryName={
+              categoryModalItem.subcategory_id
+                ? subcategoryNameById.get(categoryModalItem.subcategory_id) || ""
+                : ""
+            }
+            onClose={handleCloseCategoryItem}
+          />
+        </CategoryItemDetailModal>
+      )}
+
           {activeImage && (
         <div
           onClick={() => setActiveImage(null)}
@@ -1714,7 +1824,7 @@ export default function Home() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 9999,
+            zIndex: 10000,
             cursor: "pointer",
             padding: "24px",
           }}

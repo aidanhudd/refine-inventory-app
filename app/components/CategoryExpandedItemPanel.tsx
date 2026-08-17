@@ -52,6 +52,7 @@ export default function CategoryExpandedItemPanel({
   onClose,
   isInlineEditing,
   inlineDraft,
+  inlineSaving,
   onUpdateDraft,
   onSave,
   onCancel,
@@ -62,7 +63,13 @@ export default function CategoryExpandedItemPanel({
   return (
     <div className="category-expanded-card">
       <div className="category-expanded-card-toolbar">
-        <Button type="button" variant="secondary" size="sm" onClick={onClose}>
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onClose}
+          disabled={inlineSaving}
+        >
           Close
         </Button>
       </div>
@@ -116,6 +123,7 @@ export default function CategoryExpandedItemPanel({
             photos={photos}
             isInlineEditing={isInlineEditing}
             inlineDraft={inlineDraft}
+            inlineSaving={inlineSaving}
             onUpdateDraft={onUpdateDraft}
             onSave={onSave}
             onCancel={onCancel}
