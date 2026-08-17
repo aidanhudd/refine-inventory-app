@@ -60,6 +60,7 @@ export default function AppearanceInventoryFieldsControls({
                 type="checkbox"
                 checked={!isHidden}
                 disabled={disabled}
+                aria-label={`${label} visible`}
                 onChange={(e) => {
                   onChangeHiddenFields(
                     setOptionalFieldHidden(
