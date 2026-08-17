@@ -437,4 +437,311 @@ export async function upsertAppearanceDraft(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Reset / history / restore (P3-5A) — never throws into React
+// ---------------------------------------------------------------------------
+
+export type AppearanceVersionSource = "publish" | "restore_publish"
+
+/** History row safe for UI — never includes raw config JSON. */
+export type AppearanceVersionHistoryEntry = {
+  id: string
+  versionNumber: bigint
+  label: string | null
+  configSchemaVersion: number
+  createdBy: string
+  createdAt: string
+  source: AppearanceVersionSource | "unknown"
+  /** False when schema/config cannot be restored through this app build. */
+  restorable: boolean
+  unavailableReason: string | null
+}
+
+export type ResetAppearanceDraftResult =
+  | { status: "reset" }
+  | { status: "error"; message: string; code: string | null }
+  | { status: "timeout"; message: string }
+
+export type ListAppearanceVersionsResult =
+  | { status: "history"; versions: AppearanceVersionHistoryEntry[] }
+  | { status: "error"; message: string; code: string | null }
+  | { status: "timeout"; message: string }
+
+export type RestoreAppearanceVersionResult =
+  | { status: "restored"; row: AppearanceDraftRow }
+  | {
+      status: "invalid"
+      message: string
+      issues: AppearanceValidationIssue[]
+      code: string | null
+    }
+  | { status: "error"; message: string; code: string | null }
+  | { status: "timeout"; message: string }
+
+type AppearanceVersionRpcRow = {
+  id: unknown
+  version_number: unknown
+  label: unknown
+  config: unknown
+  config_schema_version: unknown
+  created_by: unknown
+  created_at: unknown
+  source: unknown
+}
+
+function isAppearanceVersionSource(value: unknown): value is AppearanceVersionSource {
+  return value === "publish" || value === "restore_publish"
+}
+
+function mapVersionHistoryEntry(data: AppearanceVersionRpcRow): AppearanceVersionHistoryEntry | null {
+  if (typeof data.id !== "string" || data.id.length === 0) return null
+  const versionNumber = parseBigInt(data.version_number)
+  if (versionNumber === null) return null
+  if (
+    typeof data.config_schema_version !== "number" ||
+    !Number.isInteger(data.config_schema_version)
+  ) {
+    return null
+  }
+  if (typeof data.created_by !== "string" || data.created_by.length === 0) return null
+  if (typeof data.created_at !== "string" || data.created_at.length === 0) return null
+  if (data.label != null && typeof data.label !== "string") return null
+
+  const label = data.label ?? null
+  const base = {
+    id: data.id,
+    versionNumber,
+    label,
+    configSchemaVersion: data.config_schema_version,
+    createdBy: data.created_by,
+    createdAt: data.created_at,
+  }
+
+  if (!isAppearanceVersionSource(data.source)) {
+    return {
+      ...base,
+      source: "unknown",
+      restorable: false,
+      unavailableReason: "This version has an unsupported publish source and cannot be restored.",
+    }
+  }
+
+  if (!isSupportedDraftSchemaVersion(data.config_schema_version)) {
+    return {
+      ...base,
+      source: data.source,
+      restorable: false,
+      unavailableReason: `Schema version ${data.config_schema_version} is unsupported by this app build.`,
+    }
+  }
+
+  const validated = validateDraftConfig(data.config)
+  if (!validated.ok) {
+    return {
+      ...base,
+      source: data.source,
+      restorable: false,
+      unavailableReason: validated.message,
+    }
+  }
+
+  return {
+    ...base,
+    source: data.source,
+    restorable: true,
+    unavailableReason: null,
+  }
+}
+
+function appearanceErrorMessage(code: string | null, detail: string): string {
+  switch (code) {
+    case "FORBIDDEN":
+      return "You do not have permission to perform this appearance action."
+    case "VERSION_NOT_FOUND":
+      return "That appearance version was not found."
+    case "INVALID_CONFIG":
+      return detail || "Appearance configuration is invalid."
+    case "UNSUPPORTED_SCHEMA":
+      return detail || "Appearance schema version is unsupported by this app build."
+    default:
+      return detail || "Appearance request failed."
+  }
+}
+
+/**
+ * Delete the signed-in admin’s private draft only.
+ * Does not change published/live appearance. Never throws.
+ */
+export async function resetAppearanceDraft(): Promise<ResetAppearanceDraftResult> {
+  try {
+    const { error } = await withTimeout(
+      supabase.rpc("reset_appearance_draft"),
+      APPEARANCE_LOAD_TIMEOUT_MS,
+      "reset_appearance_draft",
+    )
+
+    if (error) {
+      const parsed = parseAppearanceRpcError(error.message)
+      return {
+        status: "error",
+        message: appearanceErrorMessage(parsed.code, parsed.detail),
+        code: parsed.code,
+      }
+    }
+
+    return { status: "reset" }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown appearance draft reset error"
+    if (isTimeoutMessage(message)) {
+      return { status: "timeout", message }
+    }
+    return { status: "error", message, code: null }
+  }
+}
+
+/**
+ * List published appearance versions (newest first). Config is validated privately
+ * and never returned to the UI. Never throws.
+ */
+export async function listAppearanceVersions(): Promise<ListAppearanceVersionsResult> {
+  try {
+    const { data, error } = await withTimeout(
+      supabase.rpc("list_appearance_versions"),
+      APPEARANCE_LOAD_TIMEOUT_MS,
+      "list_appearance_versions",
+    )
+
+    if (error) {
+      const parsed = parseAppearanceRpcError(error.message)
+      return {
+        status: "error",
+        message: appearanceErrorMessage(parsed.code, parsed.detail),
+        code: parsed.code,
+      }
+    }
+
+    const rows = Array.isArray(data) ? data : data == null ? [] : [data]
+    const versions: AppearanceVersionHistoryEntry[] = []
+    for (const row of rows) {
+      if (!row || typeof row !== "object") continue
+      const mapped = mapVersionHistoryEntry(row as AppearanceVersionRpcRow)
+      if (mapped) versions.push(mapped)
+    }
+
+    return { status: "history", versions }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown appearance history load error"
+    if (isTimeoutMessage(message)) {
+      return { status: "timeout", message }
+    }
+    return { status: "error", message, code: null }
+  }
+}
+
+/**
+ * Copy a published version into the caller’s private draft (no publish).
+ * Strictly validates the restored config before returning it. Never throws.
+ */
+export async function restoreAppearanceVersionToDraft(
+  versionId: string,
+): Promise<RestoreAppearanceVersionResult> {
+  if (typeof versionId !== "string" || versionId.trim().length === 0) {
+    return {
+      status: "error",
+      message: "That appearance version was not found.",
+      code: "VERSION_NOT_FOUND",
+    }
+  }
+
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .rpc("restore_appearance_version_to_draft", { p_version_id: versionId.trim() })
+        .maybeSingle(),
+      APPEARANCE_LOAD_TIMEOUT_MS,
+      "restore_appearance_version_to_draft",
+    )
+
+    if (error) {
+      const parsed = parseAppearanceRpcError(error.message)
+      if (parsed.code === "INVALID_CONFIG" || parsed.code === "UNSUPPORTED_SCHEMA") {
+        return {
+          status: "invalid",
+          message: appearanceErrorMessage(parsed.code, parsed.detail),
+          issues: [
+            {
+              path: parsed.path || "",
+              message: parsed.detail,
+            },
+          ],
+          code: parsed.code,
+        }
+      }
+      return {
+        status: "error",
+        message: appearanceErrorMessage(parsed.code, parsed.detail),
+        code: parsed.code,
+      }
+    }
+
+    if (!data) {
+      return {
+        status: "error",
+        message: "Restore appearance version returned no draft row.",
+        code: null,
+      }
+    }
+
+    const mapped = mapDraftRow(data as AppearanceDraftRpcRow)
+    if (!mapped) {
+      return {
+        status: "invalid",
+        message: "Restored appearance draft has an unexpected shape.",
+        issues: [{ path: "", message: "Unexpected restored draft row shape." }],
+        code: null,
+      }
+    }
+
+    if (!isSupportedDraftSchemaVersion(mapped.configSchemaVersion)) {
+      const invalid = unsupportedDraftSchemaResult(mapped)
+      return {
+        status: "invalid",
+        message: invalid.message,
+        issues: invalid.issues,
+        code: "UNSUPPORTED_SCHEMA",
+      }
+    }
+
+    const validated = validateDraftConfig(mapped.config)
+    if (!validated.ok) {
+      return {
+        status: "invalid",
+        message: validated.message,
+        issues: validated.issues,
+        code: "INVALID_CONFIG",
+      }
+    }
+
+    return {
+      status: "restored",
+      row: {
+        id: mapped.id,
+        config: validated.config,
+        configSchemaVersion: mapped.configSchemaVersion,
+        updatedAt: mapped.updatedAt,
+        restoredFromVersionId: mapped.restoredFromVersionId,
+      },
+    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown appearance restore error"
+    if (isTimeoutMessage(message)) {
+      return { status: "timeout", message }
+    }
+    return { status: "error", message, code: null }
+  }
+}
+
 export { APPEARANCE_LOAD_TIMEOUT_MS }

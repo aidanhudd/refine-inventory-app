@@ -7,12 +7,16 @@ import AppearanceDraftPreviewFrame, {
 } from "../../components/AppearanceDraftPreviewFrame"
 import { AppearanceDraftPreviewProvider } from "../../components/AppearanceDraftPreviewProvider"
 import AppearanceBrandingControls from "../../components/appearanceEditor/AppearanceBrandingControls"
+import AppearanceDraftResetControls from "../../components/appearanceEditor/AppearanceDraftResetControls"
 import AppearanceInventoryActionsControls from "../../components/appearanceEditor/AppearanceInventoryActionsControls"
 import AppearanceInventoryFieldsControls from "../../components/appearanceEditor/AppearanceInventoryFieldsControls"
 import AppearanceInventoryLayoutControls from "../../components/appearanceEditor/AppearanceInventoryLayoutControls"
 import AppearanceJobsControls from "../../components/appearanceEditor/AppearanceJobsControls"
 import AppearanceNavControls from "../../components/appearanceEditor/AppearanceNavControls"
 import AppearanceThemeControls from "../../components/appearanceEditor/AppearanceThemeControls"
+import AppearanceVersionHistoryControls, {
+  type AppearanceHistoryUiStatus,
+} from "../../components/appearanceEditor/AppearanceVersionHistoryControls"
 import { useAuth } from "../../components/AuthProvider"
 import { Button, Notice, PageHeader, ViewToggle } from "../../components/ui"
 import {
@@ -32,11 +36,17 @@ import {
 } from "../../../lib/appearance"
 import {
   getAppearanceDraft,
+  listAppearanceVersions,
+  resetAppearanceDraft,
+  restoreAppearanceVersionToDraft,
   upsertAppearanceDraft,
+  type AppearanceVersionHistoryEntry,
 } from "../../../lib/appearanceApi"
 import { isAdmin } from "../../../lib/profiles"
 
-type EditorStatus = "idle" | "loading" | "ready" | "saving" | "saved" | "error"
+type EditorStatus = "idle" | "loading" | "ready" | "saving" | "saved" | "error" | "resetting" | "restoring"
+type MutationKind = "save" | "reset" | "restore" | null
+
 
 const APP_TITLE_UNSAFE = /[\u0000-\u001F\u007F\u2028\u2029]/
 
@@ -94,10 +104,19 @@ export default function AdminAppearancePage() {
   const [saveMessage, setSaveMessage] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [previewWidth, setPreviewWidth] = useState<AppearancePreviewWidth>("desktop")
+  const [restoredFromVersionId, setRestoredFromVersionId] = useState<string | null>(null)
+  const [draftPersisted, setDraftPersisted] = useState(false)
+  const [historyStatus, setHistoryStatus] = useState<AppearanceHistoryUiStatus>("idle")
+  const [historyVersions, setHistoryVersions] = useState<AppearanceVersionHistoryEntry[]>([])
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [restoringVersionId, setRestoringVersionId] = useState<string | null>(null)
 
   const loadRequestIdRef = useRef(0)
   const saveRequestIdRef = useRef(0)
-  const saveInFlightRef = useRef(false)
+  const resetRequestIdRef = useRef(0)
+  const restoreRequestIdRef = useRef(0)
+  const historyRequestIdRef = useRef(0)
+  const mutationKindRef = useRef<MutationKind>(null)
   const saveSnapshotRef = useRef<string | null>(null)
   const dirtyRef = useRef(false)
   const adminIdentityKeyRef = useRef(adminIdentityKey)
@@ -108,11 +127,15 @@ export default function AdminAppearancePage() {
 
   const strictValidation = useMemo(() => validateAppearanceConfigStrict(draft), [draft])
   const titleError = titleFieldError(draft.branding.appTitle)
-  const controlsDisabled = editorStatus === "saving"
+  const mutationBusy =
+    editorStatus === "saving" ||
+    editorStatus === "resetting" ||
+    editorStatus === "restoring"
+  const controlsDisabled = mutationBusy
   const canSave =
     !!adminIdentityKey &&
     editorStatus !== "loading" &&
-    editorStatus !== "saving" &&
+    !mutationBusy &&
     dirty &&
     strictValidation.ok &&
     !titleError
@@ -121,17 +144,50 @@ export default function AdminAppearancePage() {
     const next = resetEditorDefaults()
     setDraft(next.draft)
     setBaseline(next.baseline)
+    setRestoredFromVersionId(null)
+    setDraftPersisted(false)
     setLoadWarning(null)
     setSaveMessage(null)
     setSaveError(null)
+    setHistoryStatus("idle")
+    setHistoryVersions([])
+    setHistoryError(null)
+    setRestoringVersionId(null)
     setEditorStatus(status)
+  }, [])
+
+  const loadHistory = useCallback(async () => {
+    const identityForRequest = adminIdentityKeyRef.current
+    if (!identityForRequest) return
+
+    const requestId = ++historyRequestIdRef.current
+    setHistoryStatus("loading")
+    setHistoryError(null)
+
+    const result = await listAppearanceVersions()
+
+    if (requestId !== historyRequestIdRef.current) return
+    if (identityForRequest !== adminIdentityKeyRef.current) return
+
+    if (result.status === "history") {
+      setHistoryVersions(result.versions)
+      setHistoryStatus("ready")
+      return
+    }
+
+    setHistoryVersions([])
+    setHistoryError(result.message)
+    setHistoryStatus(result.status === "timeout" ? "timeout" : "error")
   }, [])
 
   useEffect(() => {
     if (!adminIdentityKey) {
       loadRequestIdRef.current += 1
       saveRequestIdRef.current += 1
-      saveInFlightRef.current = false
+      resetRequestIdRef.current += 1
+      restoreRequestIdRef.current += 1
+      historyRequestIdRef.current += 1
+      mutationKindRef.current = null
       saveSnapshotRef.current = null
       applyEditorReset("idle")
       return
@@ -145,6 +201,8 @@ export default function AdminAppearancePage() {
     setLoadWarning(null)
     setSaveMessage(null)
     setSaveError(null)
+    setRestoredFromVersionId(null)
+    setDraftPersisted(false)
 
     void getAppearanceDraft().then((result) => {
       if (cancelled || requestId !== loadRequestIdRef.current) return
@@ -154,6 +212,8 @@ export default function AdminAppearancePage() {
         const next = cloneAppearanceConfig()
         setDraft(next)
         setBaseline(serializeConfig(next))
+        setRestoredFromVersionId(null)
+        setDraftPersisted(false)
         setEditorStatus("ready")
         return
       }
@@ -161,6 +221,8 @@ export default function AdminAppearancePage() {
       if (result.status === "draft") {
         setDraft(cloneAppearanceConfig(result.row.config))
         setBaseline(serializeConfig(result.row.config))
+        setRestoredFromVersionId(result.row.restoredFromVersionId)
+        setDraftPersisted(true)
         setEditorStatus("ready")
         return
       }
@@ -169,6 +231,8 @@ export default function AdminAppearancePage() {
         const next = cloneAppearanceConfig(result.fallbackConfig)
         setDraft(next)
         setBaseline(serializeConfig(next))
+        setRestoredFromVersionId(result.restoredFromVersionId)
+        setDraftPersisted(result.draftId != null)
         setLoadWarning(
           `${result.message} Showing compiled defaults in the editor. ${issueSummary(result.issues)}`,
         )
@@ -179,6 +243,8 @@ export default function AdminAppearancePage() {
       const next = cloneAppearanceConfig()
       setDraft(next)
       setBaseline(serializeConfig(next))
+      setRestoredFromVersionId(null)
+      setDraftPersisted(false)
       setSaveError(
         result.status === "timeout"
           ? `Draft load timed out: ${result.message}`
@@ -187,10 +253,12 @@ export default function AdminAppearancePage() {
       setEditorStatus("error")
     })
 
+    void loadHistory()
+
     return () => {
       cancelled = true
     }
-  }, [adminIdentityKey, applyEditorReset])
+  }, [adminIdentityKey, applyEditorReset, loadHistory])
 
   useEffect(() => {
     if (!dirty) return
@@ -265,12 +333,12 @@ export default function AdminAppearancePage() {
   }
 
   const saveDraft = async () => {
-    if (!adminIdentityKey || !canSave || saveInFlightRef.current) return
+    if (!adminIdentityKey || !canSave || mutationKindRef.current) return
 
     const identityForSave = adminIdentityKey
     const requestId = ++saveRequestIdRef.current
     const snapshot = serializeConfig(draft)
-    saveInFlightRef.current = true
+    mutationKindRef.current = "save"
     saveSnapshotRef.current = snapshot
 
     setEditorStatus("saving")
@@ -279,7 +347,9 @@ export default function AdminAppearancePage() {
 
     const result = await upsertAppearanceDraft(draft)
 
-    saveInFlightRef.current = false
+    if (mutationKindRef.current === "save") {
+      mutationKindRef.current = null
+    }
 
     if (requestId !== saveRequestIdRef.current) return
     if (identityForSave !== adminIdentityKeyRef.current) return
@@ -288,6 +358,8 @@ export default function AdminAppearancePage() {
     if (result.status === "saved") {
       setDraft(cloneAppearanceConfig(result.row.config))
       setBaseline(serializeConfig(result.row.config))
+      setRestoredFromVersionId(result.row.restoredFromVersionId)
+      setDraftPersisted(true)
       setSaveMessage("Draft saved. Changes are not live until published.")
       setEditorStatus("saved")
       saveSnapshotRef.current = null
@@ -304,6 +376,108 @@ export default function AdminAppearancePage() {
       result.status === "timeout"
         ? `Save timed out: ${result.message}`
         : `Could not save draft: ${result.message}`,
+    )
+    setEditorStatus("error")
+  }
+
+  const resetDraftToDefaults = async () => {
+    if (!adminIdentityKey || mutationKindRef.current || editorStatus === "loading") return
+
+    const confirmMessage = dirty
+      ? "Reset your private appearance draft to compiled defaults? This deletes only your private draft and does not change the published or live appearance. You have unsaved changes that will be discarded."
+      : "Reset your private appearance draft to compiled defaults? This deletes only your private draft and does not change the published or live appearance."
+
+    if (!window.confirm(confirmMessage)) return
+
+    const identityForReset = adminIdentityKey
+    const requestId = ++resetRequestIdRef.current
+    mutationKindRef.current = "reset"
+    setEditorStatus("resetting")
+    setSaveMessage(null)
+    setSaveError(null)
+
+    const result = await resetAppearanceDraft()
+
+    if (mutationKindRef.current === "reset") {
+      mutationKindRef.current = null
+    }
+
+    if (requestId !== resetRequestIdRef.current) return
+    if (identityForReset !== adminIdentityKeyRef.current) return
+
+    if (result.status === "reset") {
+      const next = resetEditorDefaults()
+      setDraft(next.draft)
+      setBaseline(next.baseline)
+      setRestoredFromVersionId(null)
+      setDraftPersisted(false)
+      setLoadWarning(null)
+      setSaveMessage(
+        "Private draft reset to compiled defaults. Nothing was published. Save Draft before any future Publish.",
+      )
+      setEditorStatus("ready")
+      return
+    }
+
+    setSaveError(
+      result.status === "timeout"
+        ? `Reset timed out: ${result.message}`
+        : `Could not reset draft: ${result.message}`,
+    )
+    setEditorStatus("error")
+  }
+
+  const restoreVersionToDraft = async (versionId: string) => {
+    if (!adminIdentityKey || mutationKindRef.current || editorStatus === "loading") return
+
+    const confirmed = window.confirm(
+      "Restore this published version into your private draft? Your current private draft and any unsaved editor changes will be replaced. Restoring does not publish anything.",
+    )
+    if (!confirmed) return
+
+    const identityForRestore = adminIdentityKey
+    const requestId = ++restoreRequestIdRef.current
+    mutationKindRef.current = "restore"
+    setRestoringVersionId(versionId)
+    setEditorStatus("restoring")
+    setSaveMessage(null)
+    setSaveError(null)
+
+    const result = await restoreAppearanceVersionToDraft(versionId)
+
+    if (mutationKindRef.current === "restore") {
+      mutationKindRef.current = null
+    }
+
+    if (requestId !== restoreRequestIdRef.current) return
+    if (identityForRestore !== adminIdentityKeyRef.current) {
+      setRestoringVersionId(null)
+      return
+    }
+
+    setRestoringVersionId(null)
+
+    if (result.status === "restored") {
+      setDraft(cloneAppearanceConfig(result.row.config))
+      setBaseline(serializeConfig(result.row.config))
+      setRestoredFromVersionId(result.row.restoredFromVersionId)
+      setDraftPersisted(true)
+      setLoadWarning(null)
+      setSaveMessage("Restored to your private draft. Nothing has been published.")
+      setEditorStatus("ready")
+      return
+    }
+
+    if (result.status === "invalid") {
+      setSaveError(`${result.message} ${issueSummary(result.issues)}`)
+      setEditorStatus("error")
+      return
+    }
+
+    setSaveError(
+      result.status === "timeout"
+        ? `Restore timed out: ${result.message}`
+        : `Could not restore version: ${result.message}`,
     )
     setEditorStatus("error")
   }
@@ -340,8 +514,20 @@ export default function AdminAppearancePage() {
         <div className="appearance-editor-status-row">
           <span className="appearance-editor-badge">Draft only</span>
           <span className="small">
-            {dirty ? "Unsaved changes" : editorStatus === "saved" ? "Saved" : "No unsaved changes"}
+            {dirty
+              ? "Unsaved changes"
+              : editorStatus === "saved"
+                ? "Saved"
+                : "No unsaved changes"}
           </span>
+          {restoredFromVersionId && (
+            <span className="small">Restored from a published version (not published)</span>
+          )}
+          {!draftPersisted && editorStatus !== "loading" && (
+            <span className="small">
+              No saved private draft — Publish stays unavailable until you Save Draft
+            </span>
+          )}
           <Button
             type="button"
             variant="primary"
@@ -517,6 +703,23 @@ export default function AdminAppearancePage() {
                   },
                 }))
               }
+            />
+
+            <AppearanceDraftResetControls
+              disabled={controlsDisabled}
+              resetting={editorStatus === "resetting"}
+              dirty={dirty}
+              onReset={() => void resetDraftToDefaults()}
+            />
+
+            <AppearanceVersionHistoryControls
+              status={historyStatus}
+              versions={historyVersions}
+              errorMessage={historyError}
+              disabled={controlsDisabled}
+              restoringVersionId={restoringVersionId}
+              onRefresh={() => void loadHistory()}
+              onRestore={(versionId) => void restoreVersionToDraft(versionId)}
             />
           </section>
 
