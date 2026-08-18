@@ -15,7 +15,12 @@ export type SpacingPresetId = "tight" | "normal" | "relaxed"
 export type ButtonStyleId = "solid" | "soft"
 export type ColorSchemePreference = "system" | "light"
 
+/** Allowlisted primary nav ids (Estimate is optional in nav.order). */
 export const NAV_ITEM_IDS = ["inventory", "jobs", "estimate"] as const satisfies readonly NavItemId[]
+/** Must appear exactly once in nav.order. */
+export const REQUIRED_NAV_ITEM_IDS = ["inventory", "jobs"] as const satisfies readonly NavItemId[]
+/** May appear zero or one time in nav.order. */
+export const OPTIONAL_NAV_ITEM_IDS = ["estimate"] as const satisfies readonly NavItemId[]
 export const JOBS_VIEW_MODES = ["customers", "holds", "usage"] as const satisfies readonly JobsViewMode[]
 export const INVENTORY_VIEW_MODES = ["list", "category"] as const satisfies readonly InventoryViewMode[]
 export const DETAIL_PRESENTATIONS = ["expand", "modal"] as const satisfies readonly DetailPresentation[]
@@ -87,7 +92,11 @@ export type AppearanceConfig = {
     appTitle: string
   }
   nav: {
-    /** Permutation of Inventory, Jobs, Estimate — all exactly once. */
+    /**
+     * Primary navigation order.
+     * Inventory and Jobs required exactly once; Estimate optional (0 or 1).
+     * Length is 2 or 3. Hiding Estimate removes only the nav link.
+     */
     order: NavItemId[]
   }
   jobs: {

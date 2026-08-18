@@ -15,6 +15,7 @@ import {
   NAV_ITEM_IDS,
   OPTIONAL_INVENTORY_CARD_FIELDS,
   REQUIRED_INVENTORY_CARD_FIELDS,
+  REQUIRED_NAV_ITEM_IDS,
   SPACING_PRESET_IDS,
   THEME_PRESET_IDS,
   TYPE_SCALE_IDS,
@@ -93,6 +94,65 @@ function validateExactPermutation<T extends string>(
   }
 
   if (out.length !== required.length || seen.size !== required.length) {
+    return null
+  }
+
+  return out
+}
+
+/**
+ * Nav order: inventory + jobs required once; estimate optional (0 or 1).
+ * Allowlisted ids only; original valid order preserved. Length must be 2 or 3.
+ */
+function validateNavOrder(
+  path: string,
+  value: unknown,
+  errors: AppearanceValidationIssue[],
+): NavItemId[] | null {
+  if (!Array.isArray(value)) {
+    errors.push({ path, message: "Must be an array." })
+    return null
+  }
+
+  if (value.length !== 2 && value.length !== 3) {
+    errors.push({
+      path,
+      message: `Must contain exactly 2 or 3 entries (got ${value.length}).`,
+    })
+  }
+
+  const seen = new Set<string>()
+  const out: NavItemId[] = []
+
+  for (let i = 0; i < value.length; i += 1) {
+    const entry = value[i]
+    const entryPath = `${path}[${i}]`
+    if (!isOneOf(entry, NAV_ITEM_IDS)) {
+      errors.push({
+        path: entryPath,
+        message: `Invalid id "${String(entry)}". Allowed: ${NAV_ITEM_IDS.join(", ")}.`,
+      })
+      continue
+    }
+    if (seen.has(entry)) {
+      errors.push({ path: entryPath, message: `Duplicate id "${entry}".` })
+      continue
+    }
+    seen.add(entry)
+    out.push(entry)
+  }
+
+  for (const id of REQUIRED_NAV_ITEM_IDS) {
+    if (!seen.has(id)) {
+      errors.push({ path, message: `Missing required id "${id}".` })
+    }
+  }
+
+  const lengthOk = value.length === 2 || value.length === 3
+  const requiredOk = REQUIRED_NAV_ITEM_IDS.every((id) => seen.has(id))
+  const allEntriesValid = out.length === value.length && seen.size === out.length
+
+  if (!lengthOk || !requiredOk || !allEntriesValid) {
     return null
   }
 
@@ -307,7 +367,7 @@ export function validateAppearanceConfigStrict(
     for (const key of unknownKeys(input.nav, ["order"])) {
       errors.push({ path: `nav.${key}`, message: `Unknown key "${key}" is not allowed.` })
     }
-    navOrder = validateExactPermutation("nav.order", input.nav.order, NAV_ITEM_IDS, errors)
+    navOrder = validateNavOrder("nav.order", input.nav.order, errors)
   }
 
   // jobs
