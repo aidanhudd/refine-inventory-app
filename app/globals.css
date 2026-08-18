@@ -1847,6 +1847,7 @@ button:focus-visible {
 .inventory-photo-open-btn {
   display: block;
   width: 100%;
+  height: 100%;
   padding: 0;
   border: none;
   background: transparent;
@@ -1854,7 +1855,7 @@ button:focus-visible {
   border-radius: inherit;
 }
 .inventory-photo-open-btn:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
   outline-offset: 2px;
 }
 .inventory-photo-thumb {

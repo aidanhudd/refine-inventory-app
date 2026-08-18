@@ -45,10 +45,65 @@ export type ModalShellProps = {
   initialFocusRef?: RefObject<HTMLElement | null>
 }
 
-function listFocusable(panel: HTMLElement): HTMLElement[] {
-  return Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true",
+function isDisabledControl(el: HTMLElement): boolean {
+  if (el.hasAttribute("disabled")) return true
+  if (el.getAttribute("aria-disabled") === "true") return true
+  if (el instanceof HTMLInputElement || el instanceof HTMLButtonElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) {
+    return el.disabled
+  }
+  return false
+}
+
+function hasHiddenAncestor(el: HTMLElement, root: HTMLElement): boolean {
+  let node: HTMLElement | null = el
+  while (node && node !== root) {
+    if (node.hidden || node.getAttribute("aria-hidden") === "true") return true
+    if (node.hasAttribute("inert")) return true
+    node = node.parentElement
+  }
+  // Also reject if root itself is inert/hidden (inactive dialog).
+  if (root.hidden || root.getAttribute("aria-hidden") === "true" || root.hasAttribute("inert")) {
+    return true
+  }
+  return false
+}
+
+function isVisuallyFocusable(el: HTMLElement, root: HTMLElement): boolean {
+  if (isDisabledControl(el)) return false
+  if (el.tabIndex < 0 && el !== root) return false
+  if (el.getAttribute("aria-hidden") === "true") return false
+  if (hasHiddenAncestor(el, root)) return false
+  if (el.getClientRects().length === 0) return false
+
+  const style = window.getComputedStyle(el)
+  if (style.visibility === "hidden" || style.display === "none") return false
+
+  return true
+}
+
+/** Visible, interactive focus targets inside a dialog panel (excludes display:none / aria-hidden trees). */
+export function listFocusableInModal(panel: HTMLElement): HTMLElement[] {
+  return Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter((el) =>
+    isVisuallyFocusable(el, panel),
   )
+}
+
+function canRestoreFocusTo(el: HTMLElement): boolean {
+  if (!el.isConnected) return false
+  if (isDisabledControl(el)) return false
+  if (el.getClientRects().length === 0) return false
+
+  const style = window.getComputedStyle(el)
+  if (style.visibility === "hidden" || style.display === "none") return false
+
+  let node: HTMLElement | null = el
+  while (node) {
+    if (node.hidden || node.getAttribute("aria-hidden") === "true") return false
+    if (node.hasAttribute("inert")) return false
+    node = node.parentElement
+  }
+
+  return true
 }
 
 /**
@@ -102,14 +157,21 @@ export default function ModalShell({
     }
 
     const focusInitial = () => {
+      // Preserve focus already inside this dialog (e.g. nested opener restored into category detail).
       if (panel.contains(document.activeElement)) return
+
       const preferred = initialFocusRef?.current
-      if (preferred && panel.contains(preferred)) {
+      if (preferred && panel.contains(preferred) && isVisuallyFocusable(preferred, panel)) {
         preferred.focus()
         return
       }
-      const items = listFocusable(panel)
-      items[0]?.focus()
+
+      const items = listFocusableInModal(panel)
+      if (items[0]) {
+        items[0].focus()
+        return
+      }
+      panel.focus()
     }
 
     const frame = window.requestAnimationFrame(focusInitial)
@@ -129,9 +191,12 @@ export default function ModalShell({
 
       if (event.key !== "Tab") return
 
-      const items = listFocusable(panel)
+      const items = listFocusableInModal(panel)
       if (items.length === 0) {
         event.preventDefault()
+        if (document.activeElement !== panel) {
+          panel.focus()
+        }
         return
       }
 
@@ -140,14 +205,14 @@ export default function ModalShell({
       const active = document.activeElement as HTMLElement | null
 
       if (event.shiftKey) {
-        if (active === first || !panel.contains(active)) {
+        if (active === first || active === panel || !panel.contains(active)) {
           event.preventDefault()
           last.focus()
         }
         return
       }
 
-      if (active === last || !panel.contains(active)) {
+      if (active === last || active === panel || !panel.contains(active)) {
         event.preventDefault()
         first.focus()
       }
@@ -165,9 +230,11 @@ export default function ModalShell({
 
       if (!restoreFocus) return
       const target = returnFocusRef.current
-      if (target && document.contains(target)) {
-        target.focus()
-      }
+      window.requestAnimationFrame(() => {
+        if (target && canRestoreFocusTo(target)) {
+          target.focus()
+        }
+      })
     }
   }, [inactive, initialFocusRef, restoreFocus, lockBodyScroll])
 
@@ -188,6 +255,7 @@ export default function ModalShell({
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
+        tabIndex={-1}
       >
         {children}
       </div>
