@@ -1844,15 +1844,60 @@ button:focus-visible {
   justify-content: center;
   padding: 0;
 }
+.inventory-photo-open-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: inherit;
+}
+.inventory-photo-open-btn:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
 .inventory-photo-thumb {
   cursor: pointer;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  border-radius: inherit;
 }
 .inventory-photo-status {
   margin-top: var(--space-3);
+}
+.photo-lightbox-overlay {
+  z-index: calc(var(--z-modal) + 1);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 24px;
+  cursor: pointer;
+}
+.photo-lightbox-panel {
+  width: auto;
+  max-width: min(95vw, 1200px);
+  max-height: min(95vh, 100%);
+  margin: 0;
+  padding: var(--space-3);
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+  cursor: default;
+}
+.photo-lightbox-toolbar {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+.photo-lightbox-image {
+  max-width: 95%;
+  max-height: calc(95vh - 4rem);
+  border-radius: 12px;
+  object-fit: contain;
 }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 10px; margin-top: 12px; }
 .photo-box { aspect-ratio: 1 / 1; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--photo-bg); }

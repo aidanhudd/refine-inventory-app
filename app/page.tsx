@@ -9,6 +9,7 @@ import InventoryItemCard from "./components/InventoryItemCard"
 import InventoryCategoryGridCard from "./components/InventoryCategoryGridCard"
 import CategoryExpandedItemPanel from "./components/CategoryExpandedItemPanel"
 import CategoryItemDetailModal from "./components/CategoryItemDetailModal"
+import InventoryPhotoLightbox from "./components/InventoryPhotoLightbox"
 import UseInventoryModal from "./components/UseInventoryModal"
 import HoldItemModal from "./components/HoldItemModal"
 import ItemDimensionsFields from "./components/ItemDimensionsFields"
@@ -1344,39 +1345,6 @@ export default function Home() {
 
   const categoryNestedLayerActive = !!(activeImage || holdModalOpen || useModalOpen)
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return
-
-      // Topmost layer only. Hold/Use own their Close/overlay + submitting guards —
-      // never force-close them from the page (would hide UI while a save continues).
-      if (activeImage) {
-        event.preventDefault()
-        setActiveImage(null)
-        return
-      }
-
-      if (holdModalOpen || useModalOpen) {
-        return
-      }
-
-      if (isCategoryModalPresentation && categoryExpandedItemId && !inlineSaving) {
-        event.preventDefault()
-        handleCloseCategoryItem()
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown)
-    return () => window.removeEventListener("keydown", onKeyDown)
-  }, [
-    activeImage,
-    holdModalOpen,
-    useModalOpen,
-    isCategoryModalPresentation,
-    categoryExpandedItemId,
-    inlineSaving,
-  ])
-
   return (
   <main>
       <div className={`stats ${hidePrices ? "stats-no-pricing" : ""}`}>
@@ -1806,34 +1774,8 @@ export default function Home() {
       )}
 
           {activeImage && (
-        <div
-          onClick={() => setActiveImage(null)}
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            background: "rgba(0,0,0,0.9)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 10000,
-            cursor: "pointer",
-            padding: "24px",
-          }}
-        >
-          <img
-            src={activeImage}
-            alt="Full size inventory"
-            style={{
-              maxWidth: "95%",
-              maxHeight: "95%",
-              borderRadius: "12px",
-            }}
-          />
-        </div>
-      )}
+            <InventoryPhotoLightbox src={activeImage} onClose={() => setActiveImage(null)} />
+          )}
 
       {holdModalOpen && selectedItem && (
         <HoldItemModal

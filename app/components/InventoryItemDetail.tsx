@@ -393,6 +393,7 @@ export default function InventoryItemDetail({
                   <button
                     type="button"
                     className="inventory-photo-delete-btn"
+                    aria-label="Delete photo"
                     onClick={(e) => {
                       e.stopPropagation()
                       const confirmed = confirm("Delete this photo?")
@@ -402,12 +403,14 @@ export default function InventoryItemDetail({
                   >
                     ×
                   </button>
-                  <img
-                    src={url}
-                    alt="Inventory item"
-                    className="inventory-photo-thumb"
+                  <button
+                    type="button"
+                    className="inventory-photo-open-btn"
+                    aria-label="View full-size inventory photo"
                     onClick={() => onPhotoClick(url)}
-                  />
+                  >
+                    <img src={url} alt="" className="inventory-photo-thumb" />
+                  </button>
                 </div>
               ))}
             </div>

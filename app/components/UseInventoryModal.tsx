@@ -132,6 +132,10 @@ export default function UseInventoryModal({ itemName, onClose, onConfirm }: UseI
   return (
     <ModalShell
       ariaLabel={title}
+      dismissDisabled={submitting}
+      onEscape={() => {
+        if (!submitting) onClose()
+      }}
       onOverlayClick={() => {
         if (!submitting) onClose()
       }}

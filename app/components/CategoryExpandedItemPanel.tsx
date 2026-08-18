@@ -81,7 +81,7 @@ export default function CategoryExpandedItemPanel({
             className="category-grid-card-photo-wrap category-expanded-photo-hero"
             onClick={() => primaryPhoto && onPhotoClick(primaryPhoto)}
             disabled={!primaryPhoto}
-            aria-label={primaryPhoto ? "View full-size photo" : "No photo available"}
+            aria-label={primaryPhoto ? "View full-size inventory photo" : "No photo available"}
           >
             {primaryPhoto ? (
               <img src={primaryPhoto} alt="" className="category-grid-card-photo" />
@@ -108,7 +108,12 @@ export default function CategoryExpandedItemPanel({
                   >
                     ×
                   </button>
-                  <button type="button" className="category-expanded-photo-thumb-btn" onClick={() => onPhotoClick(url)}>
+                  <button
+                    type="button"
+                    className="category-expanded-photo-thumb-btn"
+                    aria-label="View full-size inventory photo"
+                    onClick={() => onPhotoClick(url)}
+                  >
                     <img src={url} alt="" />
                   </button>
                 </div>

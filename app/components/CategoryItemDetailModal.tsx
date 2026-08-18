@@ -1,10 +1,6 @@
 "use client"
 
-import {
-  ReactNode,
-  useEffect,
-  useRef,
-} from "react"
+import { ReactNode, useEffect } from "react"
 import { ModalShell } from "./ui"
 
 type CategoryItemDetailModalProps = {
@@ -16,19 +12,11 @@ type CategoryItemDetailModalProps = {
   children: ReactNode
 }
 
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "textarea:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",")
-
 /**
  * Category inventory item detail modal (detailPresentation === "modal").
- * Reuses CategoryExpandedItemPanel content via children; coordinates inert state
- * when nested Use/Hold/lightbox layers are active.
+ * Reuses CategoryExpandedItemPanel content via children; becomes inactive/inert
+ * when nested Use/Hold/lightbox layers own Escape and focus.
+ * Card focus restore is owned by the page after close.
  */
 export default function CategoryItemDetailModal({
   open,
@@ -37,8 +25,6 @@ export default function CategoryItemDetailModal({
   onClose,
   children,
 }: CategoryItemDetailModalProps) {
-  const overlayWrapRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (!open) return
     const previousOverflow = document.body.style.overflow
@@ -48,65 +34,22 @@ export default function CategoryItemDetailModal({
     }
   }, [open])
 
-  useEffect(() => {
-    if (!open) return
-    const dialog = overlayWrapRef.current?.querySelector<HTMLElement>('[role="dialog"]')
-    if (!dialog) return
-
-    dialog.inert = nestedLayerActive
-
-    if (nestedLayerActive) return
-
-    const focusables = () =>
-      Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-        (el) => !el.hasAttribute("disabled") && el.tabIndex !== -1,
-      )
-
-    const initial = focusables()
-    const closeButton =
-      initial.find((el) => el.textContent?.trim() === "Close") ?? initial[0]
-    closeButton?.focus()
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Tab" || nestedLayerActive) return
-      const items = focusables()
-      if (items.length === 0) return
-      const first = items[0]
-      const last = items[items.length - 1]
-      const active = document.activeElement as HTMLElement | null
-
-      if (event.shiftKey) {
-        if (active === first || !dialog.contains(active)) {
-          event.preventDefault()
-          last.focus()
-        }
-        return
-      }
-
-      if (active === last || !dialog.contains(active)) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-
-    dialog.addEventListener("keydown", onKeyDown)
-    return () => {
-      dialog.removeEventListener("keydown", onKeyDown)
-      dialog.inert = false
-    }
-  }, [open, nestedLayerActive])
-
   if (!open) return null
 
   const canDismiss = !nestedLayerActive && !inlineSaving
 
   return (
-    <div ref={overlayWrapRef} className="category-item-detail-modal-root">
+    <div className="category-item-detail-modal-root">
       <ModalShell
         ariaLabel="Inventory item details"
         panelClassName="modal-panel modal-panel-inventory-detail"
         className={nestedLayerActive ? "modal-shell-under-nested" : ""}
+        inactive={nestedLayerActive}
+        dismissDisabled={!canDismiss}
+        onEscape={canDismiss ? onClose : undefined}
         onOverlayClick={canDismiss ? onClose : undefined}
+        restoreFocus={false}
+        lockBodyScroll={false}
       >
         {children}
       </ModalShell>

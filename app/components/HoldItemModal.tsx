@@ -184,6 +184,10 @@ export default function HoldItemModal({ itemId, itemName, onClose, onPlaced }: H
   return (
     <ModalShell
       ariaLabel={title}
+      dismissDisabled={submitting}
+      onEscape={() => {
+        if (!submitting) onClose()
+      }}
       onOverlayClick={() => {
         if (!submitting) onClose()
       }}
