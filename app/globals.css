@@ -1354,6 +1354,20 @@ button:focus-visible {
   align-items: center;
   gap: 8px;
   font-size: 14px;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+.appearance-editor-radio input[type="radio"] {
+  width: 1rem;
+  min-width: 1rem;
+  max-width: 1rem;
+  height: 1rem;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  align-self: center;
+  box-shadow: none;
 }
 .appearance-editor-preview-panel {
   display: grid;
@@ -1650,6 +1664,21 @@ button:focus-visible {
   gap: 6px;
   font-size: 13px;
   font-weight: 600;
+  width: fit-content;
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+.appearance-field-visibility input[type="checkbox"] {
+  width: 1rem;
+  min-width: 1rem;
+  max-width: 1rem;
+  height: 1rem;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  align-self: center;
+  border-radius: 3px;
+  box-shadow: none;
 }
 .appearance-preview-field {
   display: flex;
