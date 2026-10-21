@@ -1,8 +1,8 @@
--- Pending Price Book calculation-detail function.
--- Do not apply until reviewed. Do not edit the applied Price Book migrations.
--- This adds one security-invoker reader. It does not change stored prices,
--- settings, or the existing calculation functions.
---
+-- Approved Price Book calculation-detail migration.
+-- Applying it adds the material calculation reader for purchase tax and gross profit.
+-- Depends on supabase/migrations/20261021190652_price_book_material_purchase_tax.sql.
+-- Do not edit the applied Price Book migrations.
+
 -- Materials need the purchase-tax amount and the gross-profit amount in
 -- addition to the values already returned by price_book_material_price_snapshot.
 -- Gross profit is round(unit selling price - tax-inclusive cost, 2), half away
