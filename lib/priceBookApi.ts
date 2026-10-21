@@ -2,6 +2,7 @@ import { supabase, supabaseAnonKey, supabaseUrl } from "./supabaseClient"
 import {
   derivedCoverageUnit,
   isEntryType,
+  missingPurchaseTaxColumn,
   redactAuditMoney,
   sameNumericText,
   type EntryDraft,
@@ -21,6 +22,8 @@ export type PriceBookCatalog = {
   identifiers: SupplierIdentifier[]
   suppliers: PriceBookSupplier[]
   companyMargin: string | null
+  companyPurchaseTax: string | null
+  purchaseTaxAvailable: boolean
   settingsPresent: boolean
 }
 
@@ -333,6 +336,7 @@ export function stripCatalogMoney(catalog: PriceBookCatalog): PriceBookCatalog {
   return {
     ...catalog,
     companyMargin: null,
+    companyPurchaseTax: null,
     entries: catalog.entries.map((entry) => ({
       ...entry,
       purchase_cost: null,
@@ -342,8 +346,33 @@ export function stripCatalogMoney(catalog: PriceBookCatalog): PriceBookCatalog {
   }
 }
 
+async function readCompanyPurchaseTax(
+  session: AccountSession,
+  includeMoney: boolean,
+): Promise<{ available: boolean; tax: string | null }> {
+  try {
+    const rows = await readRows(
+      session,
+      query("price_book_settings", {
+        select: "default_material_purchase_tax_percent::text",
+        id: "eq.1",
+        ...(includeMoney ? {} : { limit: "0" }),
+      }),
+    )
+    if (!includeMoney) return { available: true, tax: null }
+    const settings = rows[0]
+    if (!settings) return { available: true, tax: null }
+    const tax = decimalText(settings, "default_material_purchase_tax_percent", true)
+    if (tax == null) throw new Error("Material purchase tax was not returned as a decimal.")
+    return { available: true, tax }
+  } catch (error) {
+    if (missingPurchaseTaxColumn(error)) return { available: false, tax: null }
+    throw error
+  }
+}
+
 export async function loadPriceBook(session: AccountSession, includeMoney: boolean): Promise<PriceBookCatalog> {
-  const [entryRows, identifierRows, supplierRows, settingRows] = await Promise.all([
+  const [entryRows, identifierRows, supplierRows, settingRows, purchaseTax] = await Promise.all([
     readAllRows(
       session,
       "price_book_entries",
@@ -364,6 +393,7 @@ export async function loadPriceBook(session: AccountSession, includeMoney: boole
         id: "eq.1",
       }),
     ),
+    readCompanyPurchaseTax(session, includeMoney),
   ])
 
   const settings = settingRows[0]
@@ -377,6 +407,8 @@ export async function loadPriceBook(session: AccountSession, includeMoney: boole
     identifiers: identifierRows.map(parseIdentifier),
     suppliers: supplierRows.map(parseSupplier),
     companyMargin,
+    companyPurchaseTax: includeMoney ? purchaseTax.tax : null,
+    purchaseTaxAvailable: purchaseTax.available,
     settingsPresent: settingRows.length > 0,
   }
 }
@@ -637,6 +669,16 @@ export async function saveCompanyMargin(session: AccountSession, margin: string)
     "PATCH",
     query("price_book_settings", { id: "eq.1", select: "id" }),
     { default_material_gross_margin_percent: margin.trim() },
+  )
+  assertWrote(rows, NO_CHANGE)
+}
+
+export async function saveCompanyPurchaseTax(session: AccountSession, purchaseTax: string): Promise<void> {
+  const rows = await mutate(
+    session,
+    "PATCH",
+    query("price_book_settings", { id: "eq.1", select: "id" }),
+    { default_material_purchase_tax_percent: purchaseTax.trim() },
   )
   assertWrote(rows, NO_CHANGE)
 }

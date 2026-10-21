@@ -216,6 +216,9 @@ export function priceBookErrorMessage(error: unknown): string {
   if (/price_book_entry_inventory_items_item_uidx/i.test(raw)) {
     return "That inventory record is already linked to a material."
   }
+  if (missingPurchaseTaxColumn(error)) {
+    return "Material purchase tax is not in the database yet. Selling prices do not include purchase tax until that update is applied."
+  }
   if (/does not exist|schema cache|PGRST205/i.test(raw)) {
     return "The price book is not available yet. Try again after the database update is in place."
   }
@@ -290,6 +293,34 @@ export function validateMarginInput(value: string): string | null {
   return marginValueError(value)
 }
 
+export function missingPurchaseTaxColumn(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : ""
+  return /default_material_purchase_tax_percent/i.test(raw) && /does not exist|schema cache|PGRST204|42703/i.test(raw)
+}
+
+export const PURCHASE_TAX_UNAVAILABLE =
+  "Material purchase tax is not in the database yet. Selling prices do not include purchase tax until that update is applied."
+
+function purchaseTaxValueError(value: string): string | null {
+  const scaleError = decimalError(value, 2, "Material purchase tax", true)
+  if (scaleError) return scaleError
+  const whole = value.trim().split(".")[0].replace(/^0+(?=\d)/, "")
+  if (whole.length > 3) return "Material purchase tax must be at least 0 and at most 999.99."
+  return null
+}
+
+export function validatePurchaseTaxInput(value: string): string | null {
+  return purchaseTaxValueError(value)
+}
+
+export function materialCalculationDetail(purchaseTaxAvailable: boolean, purchaseTax: string | null): string {
+  if (!purchaseTaxAvailable) {
+    return `${PURCHASE_TAX_UNAVAILABLE} The database converts the pretax purchase cost into the pricing unit and divides by the gross-margin factor. A sample line total extends the database unit selling price and does not add purchase tax. This screen does not calculate the price.`
+  }
+  const tax = purchaseTax ? readablePercent(purchaseTax) : "the company material purchase tax"
+  return `The database converts the supplier purchase cost into the pricing unit, then uses pretax cost × tax factor ÷ margin factor. The tax factor is 1 + ${tax} material purchase tax. The margin factor is 1 − the gross margin. Purchase tax is applied once, after a confirmed package conversion. A sample line total extends that unit selling price and does not apply purchase tax again. This screen does not calculate the price.`
+}
+
 export function validateSampleQuantity(value: string, flat: boolean): string | null {
   if (flat && value.trim() !== "1") return "Flat labor is one charge. Quantity must be 1."
   return decimalError(value, 4, "Quantity", true)
@@ -312,7 +343,7 @@ export function validateEntryDraft(draft: EntryDraft, isCreate: boolean, savedSu
     if (!(MATERIAL_UNITS as readonly string[]).includes(draft.priceBasis)) {
       return "Price basis must be square foot, linear foot, each, or box."
     }
-    const costError = decimalError(draft.purchaseCost, 4, "Purchase cost", true)
+    const costError = decimalError(draft.purchaseCost, 4, "Purchase cost excluding purchase tax", true)
     if (costError) return costError
     if (draft.marginMode === "override") {
       const marginError = marginValueError(draft.marginOverride)
@@ -403,12 +434,17 @@ export function auditActionLabel(action: string): string {
 
 export const AUDIT_MONEY_KEYS = [
   "purchase_cost",
+  "pretax_cost_per_pricing_unit",
+  "tax_inclusive_cost_per_pricing_unit",
   "labor_selling_rate",
   "gross_margin_percent_override",
   "company_default_gross_margin_percent",
   "effective_gross_margin_percent",
   "unit_selling_price",
   "default_material_gross_margin_percent",
+  "purchase_tax_percent",
+  "company_default_purchase_tax_percent",
+  "default_material_purchase_tax_percent",
 ] as const
 
 export const AUDIT_MARGIN_KEYS = new Set([
@@ -416,6 +452,9 @@ export const AUDIT_MARGIN_KEYS = new Set([
   "company_default_gross_margin_percent",
   "effective_gross_margin_percent",
   "default_material_gross_margin_percent",
+  "purchase_tax_percent",
+  "company_default_purchase_tax_percent",
+  "default_material_purchase_tax_percent",
 ])
 
 export const AUDIT_FIELDS: { key: string; label: string }[] = [
@@ -430,7 +469,12 @@ export const AUDIT_FIELDS: { key: string; label: string }[] = [
   { key: "coverage_quantity", label: "Coverage quantity" },
   { key: "coverage_unit", label: "Coverage unit" },
   { key: "supplier_id", label: "Supplier" },
-  { key: "purchase_cost", label: "Purchase cost" },
+  { key: "purchase_cost", label: "Purchase cost excluding purchase tax" },
+  { key: "pretax_cost_per_pricing_unit", label: "Pretax cost per pricing unit" },
+  { key: "purchase_tax_percent", label: "Material purchase tax" },
+  { key: "company_default_purchase_tax_percent", label: "Company material purchase tax" },
+  { key: "default_material_purchase_tax_percent", label: "Company material purchase tax" },
+  { key: "tax_inclusive_cost_per_pricing_unit", label: "Tax-inclusive cost per pricing unit" },
   { key: "gross_margin_percent_override", label: "Item margin" },
   { key: "company_default_gross_margin_percent", label: "Company default margin" },
   { key: "effective_gross_margin_percent", label: "Effective margin" },

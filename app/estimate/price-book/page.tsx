@@ -21,15 +21,18 @@ import {
   entryTypeLabel,
   filterPriceBookEntries,
   identifierKindLabel,
+  materialCalculationDetail,
   materialsForSellingPrices,
   pagePriceBookEntries,
   PRICE_BOOK_DISPLAY_PAGE_SIZE,
   priceBookErrorMessage,
+  PURCHASE_TAX_UNAVAILABLE,
   readableDecimal,
   readableMoney,
   readablePercent,
   unitLabel,
   validateMarginInput,
+  validatePurchaseTaxInput,
   validateSampleQuantity,
   type PriceBookEntry,
 } from "../../../lib/priceBook"
@@ -41,6 +44,7 @@ import {
   sampleLaborLineTotal,
   sampleMaterialLineTotal,
   saveCompanyMargin,
+  saveCompanyPurchaseTax,
   saveSupplier,
   setEntryStatus,
   setSupplierStatus,
@@ -109,6 +113,7 @@ function PriceBookScreen({
   const [supplierDraft, setSupplierDraft] = useState<SupplierDraft | null>(null)
   const [pendingArchive, setPendingArchive] = useState<{ kind: "entry" | "supplier"; id: string } | null>(null)
   const [marginInput, setMarginInput] = useState("")
+  const [purchaseTaxInput, setPurchaseTaxInput] = useState("")
 
   const setCatalog = useCallback((next: PriceBookCatalog | null) => {
     catalogRef.current = next
@@ -203,6 +208,10 @@ function PriceBookScreen({
   useEffect(() => {
     if (catalog?.companyMargin && !pageBusy) setMarginInput(catalog.companyMargin)
   }, [catalog?.companyMargin, pageBusy])
+
+  useEffect(() => {
+    if (catalog?.companyPurchaseTax && !pageBusy) setPurchaseTaxInput(catalog.companyPurchaseTax)
+  }, [catalog?.companyPurchaseTax, pageBusy])
 
   const suppliersById = useMemo(
     () => new Map((catalog?.suppliers ?? []).map((supplier) => [supplier.id, supplier])),
@@ -333,6 +342,17 @@ function PriceBookScreen({
     void runPage((session) => saveCompanyMargin(session, marginInput))
   }
 
+  function savePurchaseTax(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!canEdit || hidePrices || readHidePricesPreference() || !catalog?.purchaseTaxAvailable) return
+    const problem = validatePurchaseTaxInput(purchaseTaxInput)
+    if (problem) {
+      setActionError(problem)
+      return
+    }
+    void runPage((session) => saveCompanyPurchaseTax(session, purchaseTaxInput))
+  }
+
   function saveSupplierDraft(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canEdit || !supplierDraft) return
@@ -378,7 +398,8 @@ function PriceBookScreen({
       {canEdit && hidePrices && (
         <Notice>
           Turn off Hide Prices to add or edit entries, the company margin, supplier identifiers, and inventory links.
-          Archive, restore, and supplier names stay available.
+          {catalog?.purchaseTaxAvailable ? " Material purchase tax can be edited then too." : ""} Archive, restore,
+          and supplier names stay available.
         </Notice>
       )}
       {actionError && <Notice>{actionError}</Notice>}
@@ -428,6 +449,48 @@ function PriceBookScreen({
             </form>
           ) : (
             <p className="section-gap">Company default gross margin: {readablePercent(catalog.companyMargin)}</p>
+          )}
+        </Card>
+      )}
+
+      {catalog?.purchaseTaxAvailable === false && <Notice>{PURCHASE_TAX_UNAVAILABLE}</Notice>}
+
+      {catalog?.purchaseTaxAvailable && catalog.settingsPresent && (
+        <Card>
+          <h2>Material purchase tax</h2>
+          <p className="subtext">
+            The company default starts at 7%. Supplier prices and purchase costs exclude this tax. It is the tax the
+            company pays on materials, separate from tax charged to a customer. Every material uses the current company
+            rate. There is no per-item purchase-tax override. Changing it affects material selling prices. Saved
+            estimate prices stay fixed once estimates are saved. This page does not save estimates.
+          </p>
+          {hidePrices ? (
+            <p className="subtext">The material purchase tax is hidden while Hide Prices is on.</p>
+          ) : canEdit ? (
+            <form onSubmit={savePurchaseTax} className="form-grid section-gap">
+              <div className="field">
+                <label htmlFor="company-purchase-tax">Material purchase tax percent</label>
+                <input
+                  id="company-purchase-tax"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={purchaseTaxInput}
+                  onChange={(event) => setPurchaseTaxInput(event.target.value)}
+                />
+              </div>
+              <div className="action-row">
+                <Button type="submit" variant="primary" disabled={pageBusy}>
+                  {pageBusy ? "Saving..." : "Save material purchase tax"}
+                </Button>
+              </div>
+            </form>
+          ) : catalog.companyPurchaseTax ? (
+            <p className="section-gap">
+              Material purchase tax: {readablePercent(catalog.companyPurchaseTax)}{" "}
+              <span className="small">exact {catalog.companyPurchaseTax}</span>
+            </p>
+          ) : (
+            <Notice>Material purchase tax was not returned. Retry after the database update is in place.</Notice>
           )}
         </Card>
       )}
@@ -608,6 +671,8 @@ function PriceBookScreen({
             identifiers={identifiersByEntry.get(entry.id) ?? []}
             price={prices[entry.id]}
             companyMargin={hidePrices ? null : catalog?.companyMargin ?? null}
+            companyPurchaseTax={hidePrices ? null : catalog?.companyPurchaseTax ?? null}
+            purchaseTaxAvailable={catalog?.purchaseTaxAvailable === true}
             hidePrices={hidePrices}
             canEdit={canEdit}
             pageBusy={pageBusy}
@@ -638,6 +703,8 @@ function PriceBookScreen({
           identifiers={editor === "new" || !editingEntry ? [] : identifiersByEntry.get(editingEntry.id) ?? []}
           suppliers={catalog.suppliers}
           companyMargin={catalog.companyMargin}
+          companyPurchaseTax={catalog.companyPurchaseTax}
+          purchaseTaxAvailable={catalog.purchaseTaxAvailable}
           onClose={() => setEditor(null)}
           onMaterialSaved={() => {
             setEditor(null)
@@ -739,6 +806,8 @@ function EntryCard({
   identifiers,
   price,
   companyMargin,
+  companyPurchaseTax,
+  purchaseTaxAvailable,
   hidePrices,
   canEdit,
   pageBusy,
@@ -757,6 +826,8 @@ function EntryCard({
   identifiers: PriceBookCatalog["identifiers"]
   price: MaterialPrice | undefined
   companyMargin: string | null
+  companyPurchaseTax: string | null
+  purchaseTaxAvailable: boolean
   hidePrices: boolean
   canEdit: boolean
   pageBusy: boolean
@@ -809,6 +880,8 @@ function EntryCard({
           entry={entry}
           price={price}
           companyMargin={companyMargin}
+          companyPurchaseTax={companyPurchaseTax}
+          purchaseTaxAvailable={purchaseTaxAvailable}
           accountId={accountId}
           onRetry={onRetryPrice}
         />
@@ -853,12 +926,16 @@ function SellingPrice({
   entry,
   price,
   companyMargin,
+  companyPurchaseTax,
+  purchaseTaxAvailable,
   accountId,
   onRetry,
 }: {
   entry: PriceBookEntry
   price: MaterialPrice | undefined
   companyMargin: string | null
+  companyPurchaseTax: string | null
+  purchaseTaxAvailable: boolean
   accountId: string
   onRetry: () => void
 }) {
@@ -873,7 +950,8 @@ function SellingPrice({
         <details className="price-book-details">
           <summary>Calculation details</summary>
           <p className="subtext">
-            This rate is stored on the entry. A sample line total is calculated by the database when you ask for it.
+            This rate is stored on the entry. Demolition and installation do not use material purchase tax or gross
+            margin. A sample line total is calculated by the database when you ask for it.
             {entry.pricing_unit === "flat" ? " Flat labor is one charge." : ""}
           </p>
           <SampleLine
@@ -912,13 +990,16 @@ function SellingPrice({
           </p>
           <details className="price-book-details">
             <summary>Calculation details</summary>
+            <p className="subtext">{materialCalculationDetail(purchaseTaxAvailable, companyPurchaseTax)}</p>
             <p className="subtext">
-              The database converts the purchase cost into the pricing unit, applies the gross margin, and rounds the
-              unit selling price to 6 decimal places. This screen does not calculate that price.
+              Purchase cost excluding purchase tax: {readableMoney(entry.purchase_cost)} (exact{" "}
+              {entry.purchase_cost ?? "—"})
             </p>
-            <p className="subtext">
-              Purchase cost: {readableMoney(entry.purchase_cost)} (exact {entry.purchase_cost ?? "—"})
-            </p>
+            {purchaseTaxAvailable && companyPurchaseTax ? (
+              <p className="subtext">
+                Material purchase tax: {readablePercent(companyPurchaseTax)} (exact {companyPurchaseTax})
+              </p>
+            ) : null}
             <p className="subtext">
               Price basis: {unitLabel(entry.price_basis)}. Pricing unit: {unitLabel(entry.pricing_unit)}.
               {entry.coverage_quantity

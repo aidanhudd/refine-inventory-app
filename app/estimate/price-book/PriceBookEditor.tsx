@@ -50,6 +50,8 @@ type PriceBookEditorProps = {
   identifiers: SupplierIdentifier[]
   suppliers: PriceBookSupplier[]
   companyMargin: string | null
+  companyPurchaseTax: string | null
+  purchaseTaxAvailable: boolean
   onClose: () => void
   onMaterialSaved: () => void
   onRefresh: () => void
@@ -67,6 +69,8 @@ function PriceBookEditorForm({
   identifiers,
   suppliers,
   companyMargin,
+  companyPurchaseTax,
+  purchaseTaxAvailable,
   onClose,
   onMaterialSaved,
   onRefresh,
@@ -243,7 +247,11 @@ function PriceBookEditorForm({
         <div className="modal-header">
           <h2>{entry ? "Edit price book entry" : "New price book entry"}</h2>
           <p className="subtext">
-            Selling prices are calculated in the database. Saving keeps the purchase cost and margin you enter here.
+            Selling prices are calculated in the database. Saving keeps the pretax purchase cost and margin you enter
+            here.
+            {purchaseTaxAvailable
+              ? " Material purchase tax comes from the company setting and is applied once."
+              : " Material purchase tax is not in the database yet, so selling prices do not include it."}
           </p>
         </div>
         {formError && (
@@ -303,6 +311,8 @@ function PriceBookEditorForm({
               entry={entry}
               supplierChoices={supplierChoices}
               companyMargin={companyMargin}
+              companyPurchaseTax={companyPurchaseTax}
+              purchaseTaxAvailable={purchaseTaxAvailable}
               units={units}
               conversionText={conversionText}
               savedSupplier={savedSupplier}
@@ -421,6 +431,8 @@ function MaterialFields({
   entry,
   supplierChoices,
   companyMargin,
+  companyPurchaseTax,
+  purchaseTaxAvailable,
   units,
   conversionText,
   savedSupplier,
@@ -441,6 +453,8 @@ function MaterialFields({
   entry: PriceBookEntry | null
   supplierChoices: PriceBookSupplier[]
   companyMargin: string | null
+  companyPurchaseTax: string | null
+  purchaseTaxAvailable: boolean
   units: "same" | "needs-confirmation" | "invalid"
   conversionText: string | null
   savedSupplier: boolean
@@ -489,7 +503,7 @@ function MaterialFields({
           onChange={(value) => onUnit("priceBasis", value)}
         />
       </Field>
-      <Field id={`${formId}-cost`} label="Purchase cost">
+      <Field id={`${formId}-cost`} label="Purchase cost excluding purchase tax">
         <input
           id={`${formId}-cost`}
           inputMode="decimal"
@@ -498,6 +512,15 @@ function MaterialFields({
           onChange={(event) => onDraft("purchaseCost", event.target.value)}
         />
       </Field>
+      <div className="field field-full">
+        <p className="small">
+          {purchaseTaxAvailable
+            ? `Supplier prices exclude material purchase tax${
+                companyPurchaseTax ? ` (${readablePercent(companyPurchaseTax)})` : ""
+              }. The database applies that company rate once when it calculates the selling price.`
+            : "Supplier prices exclude material purchase tax. That tax is not in the database yet, so selling prices do not include it."}
+        </p>
+      </div>
       <Field id={`${formId}-effective`} label="Cost effective date">
         <input
           id={`${formId}-effective`}
@@ -771,8 +794,8 @@ function LaborFields({
       </Field>
       <div className="field field-full">
         <p className="subtext">
-          Demolition and installation use a manual selling rate. They do not store a supplier, purchase cost, margin,
-          or coverage.
+          Demolition and installation use a manual selling rate. They do not store a supplier, purchase cost, material
+          purchase tax, margin, or coverage.
           {flat ? " A flat amount is one charge." : " Square-foot labor extends by the quantity on an estimate later."}
         </p>
       </div>
