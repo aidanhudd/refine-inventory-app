@@ -1,7 +1,9 @@
 import { supabase, supabaseAnonKey, supabaseUrl } from "./supabaseClient"
 import {
+  MATERIAL_CALCULATION_UNAVAILABLE,
   derivedCoverageUnit,
   isEntryType,
+  missingMaterialCalculation,
   missingPurchaseTaxColumn,
   redactAuditMoney,
   sameNumericText,
@@ -434,6 +436,70 @@ export async function materialUnitSellingPrice(session: AccountSession, entryId:
     p_entry_id: assertUuid(entryId),
   })
   return decimalFromRpcBody(text)
+}
+
+export type MaterialCalculation = {
+  pretaxCostPerPricingUnit: string
+  purchaseTaxPercent: string
+  purchaseTaxAmount: string
+  taxInclusiveCostPerPricingUnit: string
+  effectiveGrossMarginPercent: string
+  marginSource: "company" | "override"
+  grossProfitAmount: string
+  unitSellingPrice: string
+  oneUnitLineTotal: string
+}
+
+export type MaterialPriceRead = {
+  exact: string
+  calculation: MaterialCalculation | null
+  calculationMessage: string | null
+}
+
+export async function readMaterialPrice(session: AccountSession, entryId: string): Promise<MaterialPriceRead> {
+  const id = assertUuid(entryId)
+  try {
+    const calculation = await materialCalculation(session, id)
+    return { exact: calculation.unitSellingPrice, calculation, calculationMessage: null }
+  } catch (error) {
+    if (!missingMaterialCalculation(error)) throw error
+  }
+  return {
+    exact: await materialUnitSellingPrice(session, id),
+    calculation: null,
+    calculationMessage: MATERIAL_CALCULATION_UNAVAILABLE,
+  }
+}
+
+async function materialCalculation(session: AccountSession, entryId: string): Promise<MaterialCalculation> {
+  const text = await rpcText(session, "price_book_entry_material_calculation", { p_entry_id: entryId })
+  const parsed = parseJson(text)
+  const row = Array.isArray(parsed) ? parsed[0] : parsed
+  if (!row || typeof row !== "object") throw new Error("The price book did not return a calculation.")
+  const record = row as Record<string, unknown>
+  const marginSource = record.margin_source
+  if (marginSource !== "company" && marginSource !== "override") {
+    throw new Error("The price book did not return a margin source.")
+  }
+  return {
+    pretaxCostPerPricingUnit: requiredDecimal(record, "pretax_cost_per_pricing_unit"),
+    purchaseTaxPercent: requiredDecimal(record, "purchase_tax_percent"),
+    purchaseTaxAmount: requiredDecimal(record, "purchase_tax_amount"),
+    taxInclusiveCostPerPricingUnit: requiredDecimal(record, "tax_inclusive_cost_per_pricing_unit"),
+    effectiveGrossMarginPercent: requiredDecimal(record, "effective_gross_margin_percent"),
+    marginSource,
+    grossProfitAmount: requiredDecimal(record, "gross_profit_amount"),
+    unitSellingPrice: requiredDecimal(record, "unit_selling_price"),
+    oneUnitLineTotal: requiredDecimal(record, "one_unit_line_total"),
+  }
+}
+
+function requiredDecimal(record: Record<string, unknown>, key: string): string {
+  const value = record[key]
+  if (typeof value !== "string" || !/^\d+(\.\d+)?$/.test(value.trim())) {
+    throw new Error("The price book returned a calculation that was not a decimal.")
+  }
+  return value.trim()
 }
 
 export async function sampleMaterialLineTotal(

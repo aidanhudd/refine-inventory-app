@@ -219,11 +219,12 @@ export function priceBookErrorMessage(error: unknown): string {
   if (missingPurchaseTaxColumn(error)) {
     return "Material purchase tax is not in the database yet. Selling prices do not include purchase tax until that update is applied."
   }
+  if (missingMaterialCalculation(error)) return MATERIAL_CALCULATION_UNAVAILABLE
   if (/does not exist|schema cache|PGRST205/i.test(raw)) {
     return "The price book is not available yet. Try again after the database update is in place."
   }
   if (
-    /permission denied for function price_book_(validate_purchase_tax|company_default_purchase_tax|entry_unit_selling_price|entry_audit_json|estimate_material_snapshot|material_price_snapshot|material_unit_selling_price|material_line_total|material_pretax_cost_per_pricing_unit|material_price_parts)/i.test(
+    /permission denied for function price_book_(validate_purchase_tax|company_default_purchase_tax|entry_unit_selling_price|entry_audit_json|estimate_material_snapshot|entry_material_calculation|material_price_snapshot|material_unit_selling_price|material_line_total|material_pretax_cost_per_pricing_unit|material_price_parts)/i.test(
       raw,
     )
   ) {
@@ -320,12 +321,24 @@ export function validatePurchaseTaxInput(value: string): string | null {
   return purchaseTaxValueError(value)
 }
 
+export const MATERIAL_CALCULATION_UNAVAILABLE =
+  "The purchase-tax and gross-margin breakdown is not in the database yet. The selling price is still calculated. This screen does not fill in the tax amount or gross profit."
+
+export function missingMaterialCalculation(error: unknown): boolean {
+  const raw = error instanceof Error ? error.message : ""
+  return /price_book_entry_material_calculation/i.test(raw) && /does not exist|schema cache|PGRST202|42883/i.test(raw)
+}
+
+export function marginSourceLabel(source: "company" | "override"): string {
+  return source === "override" ? "Item override" : "Company default"
+}
+
 export function materialCalculationDetail(purchaseTaxAvailable: boolean, purchaseTax: string | null): string {
   if (!purchaseTaxAvailable) {
     return `${PURCHASE_TAX_UNAVAILABLE} The database converts the pretax purchase cost into the pricing unit and divides by the gross-margin factor. A sample line total extends the database unit selling price and does not add purchase tax. This screen does not calculate the price.`
   }
   const tax = purchaseTax ? readablePercent(purchaseTax) : "the company material purchase tax"
-  return `The database converts the supplier purchase cost into the pricing unit, then uses pretax cost × tax factor ÷ margin factor. The tax factor is 1 + ${tax} material purchase tax. The margin factor is 1 − the gross margin. Purchase tax is applied once, after a confirmed package conversion. A sample line total extends that unit selling price and does not apply purchase tax again. This screen does not calculate the price.`
+  return `The database converts the supplier purchase cost into the pricing unit, then uses pretax cost × tax factor ÷ margin factor. The tax factor is 1 + ${tax} material purchase tax. The margin factor is 1 − the gross margin. Purchase tax is applied once, after a confirmed package conversion. Gross profit is the unit selling price minus the tax-inclusive cost, rounded to cents by the database. A sample line total extends that unit selling price and does not apply purchase tax again. This screen does not calculate the price.`
 }
 
 export function validateSampleQuantity(value: string, flat: boolean): string | null {

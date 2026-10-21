@@ -21,6 +21,8 @@ import {
   entryTypeLabel,
   filterPriceBookEntries,
   identifierKindLabel,
+  MATERIAL_CALCULATION_UNAVAILABLE,
+  marginSourceLabel,
   materialCalculationDetail,
   materialsForSellingPrices,
   pagePriceBookEntries,
@@ -39,8 +41,9 @@ import {
 import {
   accountStill,
   loadPriceBook,
-  materialUnitSellingPrice,
   readAccountSession,
+  readMaterialPrice,
+  type MaterialCalculation,
   sampleLaborLineTotal,
   sampleMaterialLineTotal,
   saveCompanyMargin,
@@ -57,7 +60,7 @@ import PriceBookHistory from "./PriceBookHistory"
 
 type MaterialPrice =
   | { status: "loading" }
-  | { status: "ready"; exact: string }
+  | { status: "ready"; exact: string; calculation: MaterialCalculation | null; calculationMessage: string | null }
   | { status: "error"; message: string }
 
 type SupplierDraft = { id: string | null; name: string; notes: string }
@@ -133,11 +136,11 @@ function PriceBookScreen({
           index += 1
           if (gen !== priceGen.current || readHidePricesPreference()) return
           try {
-            const exact = await materialUnitSellingPrice(session, entry.id)
+            const price = await readMaterialPrice(session, entry.id)
             if (gen !== priceGen.current || readHidePricesPreference()) return
             if (!(await accountStill(accountId))) return
             if (gen !== priceGen.current || readHidePricesPreference()) return
-            setPrices((current) => ({ ...current, [entry.id]: { status: "ready", exact } }))
+            setPrices((current) => ({ ...current, [entry.id]: { status: "ready", ...price } }))
           } catch (error) {
             if (gen !== priceGen.current || readHidePricesPreference()) return
             setPrices((current) => ({
@@ -317,11 +320,11 @@ function PriceBookScreen({
     if (!session || session.userId !== accountId) return
     setPrices((current) => ({ ...current, [entryId]: { status: "loading" } }))
     try {
-      const exact = await materialUnitSellingPrice(session, entryId)
+      const price = await readMaterialPrice(session, entryId)
       if (readHidePricesPreference() || hidePrices) return
       if (!(await accountStill(accountId))) return
       if (readHidePricesPreference() || hidePrices) return
-      setPrices((current) => ({ ...current, [entryId]: { status: "ready", exact } }))
+      setPrices((current) => ({ ...current, [entryId]: { status: "ready", ...price } }))
     } catch (error) {
       if (readHidePricesPreference()) return
       setPrices((current) => ({
@@ -922,6 +925,39 @@ function EntryCard({
   )
 }
 
+function DetailAmount({ label, value }: { label: string; value: string }) {
+  return (
+    <p className="subtext">
+      {label}: {readableMoney(value)} <span className="small">exact {value}</span>
+    </p>
+  )
+}
+
+function MaterialBreakdown({ calculation }: { calculation: MaterialCalculation }) {
+  return (
+    <>
+      <DetailAmount label="Pretax supplier cost per pricing unit" value={calculation.pretaxCostPerPricingUnit} />
+      <p className="subtext">
+        Material purchase tax: {readablePercent(calculation.purchaseTaxPercent)} (
+        {readableMoney(calculation.purchaseTaxAmount)}){" "}
+        <span className="small">
+          exact rate {calculation.purchaseTaxPercent}; exact amount {calculation.purchaseTaxAmount}
+        </span>
+      </p>
+      <DetailAmount label="Tax-inclusive cost per pricing unit" value={calculation.taxInclusiveCostPerPricingUnit} />
+      <p className="subtext">
+        Effective gross margin: {readablePercent(calculation.effectiveGrossMarginPercent)} (
+        {marginSourceLabel(calculation.marginSource)}){" "}
+        <span className="small">exact {calculation.effectiveGrossMarginPercent}</span>
+      </p>
+      <DetailAmount label="Gross profit" value={calculation.grossProfitAmount} />
+      <p className="subtext">Gross profit is the unit selling price minus the tax-inclusive cost, rounded to cents.</p>
+      <DetailAmount label="Final unit selling price" value={calculation.unitSellingPrice} />
+      <DetailAmount label="One unit line total" value={calculation.oneUnitLineTotal} />
+    </>
+  )
+}
+
 function SellingPrice({
   entry,
   price,
@@ -991,15 +1027,15 @@ function SellingPrice({
           <details className="price-book-details">
             <summary>Calculation details</summary>
             <p className="subtext">{materialCalculationDetail(purchaseTaxAvailable, companyPurchaseTax)}</p>
+            {price.calculation ? (
+              <MaterialBreakdown calculation={price.calculation} />
+            ) : (
+              <Notice>{price.calculationMessage || MATERIAL_CALCULATION_UNAVAILABLE}</Notice>
+            )}
             <p className="subtext">
-              Purchase cost excluding purchase tax: {readableMoney(entry.purchase_cost)} (exact{" "}
+              Supplier purchase cost excluding purchase tax: {readableMoney(entry.purchase_cost)} (exact{" "}
               {entry.purchase_cost ?? "—"})
             </p>
-            {purchaseTaxAvailable && companyPurchaseTax ? (
-              <p className="subtext">
-                Material purchase tax: {readablePercent(companyPurchaseTax)} (exact {companyPurchaseTax})
-              </p>
-            ) : null}
             <p className="subtext">
               Price basis: {unitLabel(entry.price_basis)}. Pricing unit: {unitLabel(entry.pricing_unit)}.
               {entry.coverage_quantity
@@ -1007,7 +1043,6 @@ function SellingPrice({
                 : ""}
               {entry.price_conversion_confirmed ? " Unit conversion confirmed." : ""}
             </p>
-            <p className="subtext">Database unit selling price: {price.exact}</p>
             <SampleLine accountId={accountId} entryId={entry.id} kind="material" unitPrice={price.exact} />
           </details>
         </>
