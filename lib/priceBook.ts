@@ -329,8 +329,11 @@ export function missingMaterialCalculation(error: unknown): boolean {
   return /price_book_entry_material_calculation/i.test(raw) && /does not exist|schema cache|PGRST202|42883/i.test(raw)
 }
 
-export function marginSourceLabel(source: "company" | "override"): string {
-  return source === "override" ? "Item override" : "Company default"
+export function grossMarginDetailLine(override: string | null | undefined, companyMargin: string | null | undefined): string {
+  if (override != null && override.trim() !== "") {
+    return `Gross margin: ${readablePercent(override)} — Item override.`
+  }
+  return `Gross margin: ${readablePercent(companyMargin)} — Company default`
 }
 
 export function materialCalculationDetail(purchaseTaxAvailable: boolean, purchaseTax: string | null): string {

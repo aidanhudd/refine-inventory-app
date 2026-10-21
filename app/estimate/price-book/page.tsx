@@ -22,7 +22,7 @@ import {
   filterPriceBookEntries,
   identifierKindLabel,
   MATERIAL_CALCULATION_UNAVAILABLE,
-  marginSourceLabel,
+  grossMarginDetailLine,
   materialCalculationDetail,
   materialsForSellingPrices,
   pagePriceBookEntries,
@@ -933,7 +933,25 @@ function DetailAmount({ label, value }: { label: string; value: string }) {
   )
 }
 
-function MaterialBreakdown({ calculation }: { calculation: MaterialCalculation }) {
+function GrossMarginDetail({
+  entry,
+  companyMargin,
+}: {
+  entry: PriceBookEntry
+  companyMargin: string | null
+}) {
+  return <p className="subtext">{grossMarginDetailLine(entry.gross_margin_percent_override, companyMargin)}</p>
+}
+
+function MaterialBreakdown({
+  calculation,
+  entry,
+  companyMargin,
+}: {
+  calculation: MaterialCalculation
+  entry: PriceBookEntry
+  companyMargin: string | null
+}) {
   return (
     <>
       <DetailAmount label="Pretax supplier cost per pricing unit" value={calculation.pretaxCostPerPricingUnit} />
@@ -944,12 +962,8 @@ function MaterialBreakdown({ calculation }: { calculation: MaterialCalculation }
           exact rate {calculation.purchaseTaxPercent}; exact amount {calculation.purchaseTaxAmount}
         </span>
       </p>
+      <GrossMarginDetail entry={entry} companyMargin={companyMargin} />
       <DetailAmount label="Tax-inclusive cost per pricing unit" value={calculation.taxInclusiveCostPerPricingUnit} />
-      <p className="subtext">
-        Effective gross margin: {readablePercent(calculation.effectiveGrossMarginPercent)} (
-        {marginSourceLabel(calculation.marginSource)}){" "}
-        <span className="small">exact {calculation.effectiveGrossMarginPercent}</span>
-      </p>
       <DetailAmount label="Gross profit" value={calculation.grossProfitAmount} />
       <p className="subtext">Gross profit is the unit selling price minus the tax-inclusive cost, rounded to cents.</p>
       <DetailAmount label="Final unit selling price" value={calculation.unitSellingPrice} />
@@ -1028,9 +1042,18 @@ function SellingPrice({
             <summary>Calculation details</summary>
             <p className="subtext">{materialCalculationDetail(purchaseTaxAvailable, companyPurchaseTax)}</p>
             {price.calculation ? (
-              <MaterialBreakdown calculation={price.calculation} />
+              <MaterialBreakdown calculation={price.calculation} entry={entry} companyMargin={companyMargin} />
             ) : (
-              <Notice>{price.calculationMessage || MATERIAL_CALCULATION_UNAVAILABLE}</Notice>
+              <>
+                <Notice>{price.calculationMessage || MATERIAL_CALCULATION_UNAVAILABLE}</Notice>
+                {purchaseTaxAvailable && companyPurchaseTax ? (
+                  <p className="subtext">
+                    Material purchase tax: {readablePercent(companyPurchaseTax)}{" "}
+                    <span className="small">exact {companyPurchaseTax}</span>
+                  </p>
+                ) : null}
+                <GrossMarginDetail entry={entry} companyMargin={companyMargin} />
+              </>
             )}
             <p className="subtext">
               Supplier purchase cost excluding purchase tax: {readableMoney(entry.purchase_cost)} (exact{" "}
