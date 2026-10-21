@@ -373,7 +373,12 @@ async function readCompanyPurchaseTax(
   }
 }
 
-export async function loadPriceBook(session: AccountSession, includeMoney: boolean): Promise<PriceBookCatalog> {
+export async function loadPriceBook(
+  session: AccountSession,
+  includeMoney: boolean,
+  includeCompanySettings = false,
+): Promise<PriceBookCatalog> {
+  const revealSettings = includeMoney && includeCompanySettings
   const [entryRows, identifierRows, supplierRows, settingRows, purchaseTax] = await Promise.all([
     readAllRows(
       session,
@@ -388,14 +393,16 @@ export async function loadPriceBook(session: AccountSession, includeMoney: boole
       "entry_id.asc,id.asc",
     ),
     readAllRows(session, "price_book_suppliers", { select: "id,name,notes,status" }, "name.asc,id.asc"),
-    readRows(
-      session,
-      query("price_book_settings", {
-        select: includeMoney ? "default_material_gross_margin_percent::text" : "id",
-        id: "eq.1",
-      }),
-    ),
-    readCompanyPurchaseTax(session, includeMoney),
+    revealSettings
+      ? readRows(
+          session,
+          query("price_book_settings", {
+            select: "default_material_gross_margin_percent::text",
+            id: "eq.1",
+          }),
+        )
+      : Promise.resolve([]),
+    readCompanyPurchaseTax(session, revealSettings),
   ])
 
   const settings = settingRows[0]
@@ -409,9 +416,9 @@ export async function loadPriceBook(session: AccountSession, includeMoney: boole
     identifiers: identifierRows.map(parseIdentifier),
     suppliers: supplierRows.map(parseSupplier),
     companyMargin,
-    companyPurchaseTax: includeMoney ? purchaseTax.tax : null,
+    companyPurchaseTax: revealSettings ? purchaseTax.tax : null,
     purchaseTaxAvailable: purchaseTax.available,
-    settingsPresent: settingRows.length > 0,
+    settingsPresent: revealSettings && settingRows.length > 0,
   }
 }
 

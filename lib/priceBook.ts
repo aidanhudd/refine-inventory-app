@@ -181,6 +181,51 @@ export function readableMoney(value: string | null | undefined): string {
   return `$${withCommas}.${shown.padEnd(2, "0")}`
 }
 
+/** Two-decimal display for a decimal string. Does not turn the stored value into a number. */
+export function readableMoneyCents(value: string | null | undefined): string {
+  if (value == null || value.trim() === "") return "—"
+  const rounded = roundDecimalHalfAway(value.trim(), 2)
+  if (!rounded) return "—"
+  return readableMoney(rounded)
+}
+
+function roundDecimalHalfAway(value: string, places: number): string | null {
+  if (!DECIMAL.test(value)) return null
+  const [wholeRaw, fraction = ""] = value.split(".")
+  const whole = wholeRaw.replace(/^0+(?=\d)/, "") || "0"
+  if (fraction.length <= places) {
+    return `${whole}.${(fraction + "0".repeat(places)).slice(0, places)}`
+  }
+  const keep = fraction.slice(0, places).split("")
+  const next = fraction[places] ?? "0"
+  if (next < "5") return `${whole}.${keep.join("")}`
+  let carry = 1
+  for (let index = keep.length - 1; index >= 0; index -= 1) {
+    const digit = keep[index].charCodeAt(0) - 48 + carry
+    if (digit >= 10) {
+      keep[index] = "0"
+      carry = 1
+    } else {
+      keep[index] = String.fromCharCode(48 + digit)
+      carry = 0
+      break
+    }
+  }
+  const wholeDigits = whole.split("")
+  for (let index = wholeDigits.length - 1; carry && index >= 0; index -= 1) {
+    const digit = wholeDigits[index].charCodeAt(0) - 48 + carry
+    if (digit >= 10) {
+      wholeDigits[index] = "0"
+      carry = 1
+    } else {
+      wholeDigits[index] = String.fromCharCode(48 + digit)
+      carry = 0
+    }
+  }
+  if (carry) wholeDigits.unshift("1")
+  return `${wholeDigits.join("")}.${keep.join("")}`
+}
+
 export function readablePercent(value: string | null | undefined): string {
   if (value == null || value.trim() === "") return "—"
   const trimmed = value.trim()
@@ -322,26 +367,11 @@ export function validatePurchaseTaxInput(value: string): string | null {
 }
 
 export const MATERIAL_CALCULATION_UNAVAILABLE =
-  "The purchase-tax and gross-margin breakdown is not in the database yet. The selling price is still calculated. This screen does not fill in the tax amount or gross profit."
+  "Calculation details are not available yet. The selling price is still shown."
 
 export function missingMaterialCalculation(error: unknown): boolean {
   const raw = error instanceof Error ? error.message : ""
   return /price_book_entry_material_calculation/i.test(raw) && /does not exist|schema cache|PGRST202|42883/i.test(raw)
-}
-
-export function grossMarginDetailLine(override: string | null | undefined, companyMargin: string | null | undefined): string {
-  if (override != null && override.trim() !== "") {
-    return `Gross margin: ${readablePercent(override)} — Item override.`
-  }
-  return `Gross margin: ${readablePercent(companyMargin)} — Company default`
-}
-
-export function materialCalculationDetail(purchaseTaxAvailable: boolean, purchaseTax: string | null): string {
-  if (!purchaseTaxAvailable) {
-    return `${PURCHASE_TAX_UNAVAILABLE} The database converts the pretax purchase cost into the pricing unit and divides by the gross-margin factor. A sample line total extends the database unit selling price and does not add purchase tax. This screen does not calculate the price.`
-  }
-  const tax = purchaseTax ? readablePercent(purchaseTax) : "the company material purchase tax"
-  return `The database converts the supplier purchase cost into the pricing unit, then uses pretax cost × tax factor ÷ margin factor. The tax factor is 1 + ${tax} material purchase tax. The margin factor is 1 − the gross margin. Purchase tax is applied once, after a confirmed package conversion. Gross profit is the unit selling price minus the tax-inclusive cost, rounded to cents by the database. A sample line total extends that unit selling price and does not apply purchase tax again. This screen does not calculate the price.`
 }
 
 export function validateSampleQuantity(value: string, flat: boolean): string | null {

@@ -16,21 +16,19 @@ import {
   Toolbar,
 } from "../../components/ui"
 import { readHidePricesPreference } from "../../../lib/hidePrices"
-import { hasAppAccess, isManagerOrAdmin } from "../../../lib/profiles"
+import { hasAppAccess, isAdmin, isManagerOrAdmin } from "../../../lib/profiles"
 import {
   entryTypeLabel,
   filterPriceBookEntries,
   identifierKindLabel,
   MATERIAL_CALCULATION_UNAVAILABLE,
-  grossMarginDetailLine,
-  materialCalculationDetail,
   materialsForSellingPrices,
   pagePriceBookEntries,
   PRICE_BOOK_DISPLAY_PAGE_SIZE,
   priceBookErrorMessage,
   PURCHASE_TAX_UNAVAILABLE,
-  readableDecimal,
   readableMoney,
+  readableMoneyCents,
   readablePercent,
   unitLabel,
   validateMarginInput,
@@ -81,6 +79,7 @@ export default function PriceBookPage() {
       key={user.id}
       accountId={user.id}
       canEdit={profile.approved && isManagerOrAdmin(profile.role)}
+      canManageSettings={profile.approved && isAdmin(profile.role)}
       hidePrices={hidePrices}
     />
   )
@@ -89,10 +88,12 @@ export default function PriceBookPage() {
 function PriceBookScreen({
   accountId,
   canEdit,
+  canManageSettings,
   hidePrices,
 }: {
   accountId: string
   canEdit: boolean
+  canManageSettings: boolean
   hidePrices: boolean
 }) {
   const mounted = useRef(true)
@@ -117,6 +118,7 @@ function PriceBookScreen({
   const [pendingArchive, setPendingArchive] = useState<{ kind: "entry" | "supplier"; id: string } | null>(null)
   const [marginInput, setMarginInput] = useState("")
   const [purchaseTaxInput, setPurchaseTaxInput] = useState("")
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   const setCatalog = useCallback((next: PriceBookCatalog | null) => {
     catalogRef.current = next
@@ -168,7 +170,7 @@ function PriceBookScreen({
     const includeMoney = !hidePrices && !readHidePricesPreference()
     if (!includeMoney) setPrices({})
     try {
-      const next = await loadPriceBook(session, includeMoney)
+      const next = await loadPriceBook(session, includeMoney, canManageSettings)
       if (!mounted.current || gen !== loadGen.current) return
       if (!(await accountStill(accountId))) {
         setLoadError("The signed-in account changed. Refresh the price book before trying again.")
@@ -185,7 +187,7 @@ function PriceBookScreen({
     } finally {
       if (mounted.current && gen === loadGen.current) setLoading(false)
     }
-  }, [accountId, hidePrices, setCatalog])
+  }, [accountId, canManageSettings, hidePrices, setCatalog])
 
   useEffect(() => {
     mounted.current = true
@@ -204,6 +206,9 @@ function PriceBookScreen({
   useEffect(() => {
     if (!hidePrices) return
     setEditor(null)
+    setSettingsOpen(false)
+    setMarginInput("")
+    setPurchaseTaxInput("")
     setPrices({})
     if (catalogRef.current) setCatalog(stripCatalogMoney(catalogRef.current))
   }, [hidePrices, setCatalog])
@@ -336,7 +341,7 @@ function PriceBookScreen({
 
   function saveMargin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canEdit || hidePrices || readHidePricesPreference()) return
+    if (!canManageSettings || hidePrices || readHidePricesPreference()) return
     const problem = validateMarginInput(marginInput)
     if (problem) {
       setActionError(problem)
@@ -347,7 +352,7 @@ function PriceBookScreen({
 
   function savePurchaseTax(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!canEdit || hidePrices || readHidePricesPreference() || !catalog?.purchaseTaxAvailable) return
+    if (!canManageSettings || hidePrices || readHidePricesPreference() || !catalog?.purchaseTaxAvailable) return
     const problem = validatePurchaseTaxInput(purchaseTaxInput)
     if (problem) {
       setActionError(problem)
@@ -400,9 +405,9 @@ function PriceBookScreen({
       )}
       {canEdit && hidePrices && (
         <Notice>
-          Turn off Hide Prices to add or edit entries, the company margin, supplier identifiers, and inventory links.
-          {catalog?.purchaseTaxAvailable ? " Material purchase tax can be edited then too." : ""} Archive, restore,
-          and supplier names stay available.
+          Turn off Hide Prices to add or edit entries, supplier identifiers, and inventory links.
+          {canManageSettings ? " Pricing settings stay hidden too." : ""} Archive, restore, and supplier names stay
+          available.
         </Notice>
       )}
       {actionError && <Notice>{actionError}</Notice>}
@@ -415,87 +420,6 @@ function PriceBookScreen({
             </Button>
           </div>
         </div>
-      )}
-
-      {catalog && !catalog.settingsPresent && !loadError && (
-        <Notice>Company gross margin is not available. Retry after the price book settings are in place.</Notice>
-      )}
-
-      {catalog?.settingsPresent && (
-        <Card>
-          <h2>Company gross margin</h2>
-          <p className="subtext">
-            The company default starts at 40% gross margin. Materials that follow the default use the current company
-            margin when their selling price is calculated. Changing it affects those materials. An item override stays
-            until it is cleared. Saved estimate prices stay fixed once estimates are saved. This page does not save
-            estimates.
-          </p>
-          {hidePrices ? (
-            <p className="subtext">The company gross margin is hidden while Hide Prices is on.</p>
-          ) : canEdit ? (
-            <form onSubmit={saveMargin} className="form-grid section-gap">
-              <div className="field">
-                <label htmlFor="company-margin">Default gross margin percent</label>
-                <input
-                  id="company-margin"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  value={marginInput}
-                  onChange={(event) => setMarginInput(event.target.value)}
-                />
-              </div>
-              <div className="action-row">
-                <Button type="submit" variant="primary" disabled={pageBusy}>
-                  {pageBusy ? "Saving..." : "Save company margin"}
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <p className="section-gap">Company default gross margin: {readablePercent(catalog.companyMargin)}</p>
-          )}
-        </Card>
-      )}
-
-      {catalog?.purchaseTaxAvailable === false && <Notice>{PURCHASE_TAX_UNAVAILABLE}</Notice>}
-
-      {catalog?.purchaseTaxAvailable && catalog.settingsPresent && (
-        <Card>
-          <h2>Material purchase tax</h2>
-          <p className="subtext">
-            The company default starts at 7%. Supplier prices and purchase costs exclude this tax. It is the tax the
-            company pays on materials, separate from tax charged to a customer. Every material uses the current company
-            rate. There is no per-item purchase-tax override. Changing it affects material selling prices. Saved
-            estimate prices stay fixed once estimates are saved. This page does not save estimates.
-          </p>
-          {hidePrices ? (
-            <p className="subtext">The material purchase tax is hidden while Hide Prices is on.</p>
-          ) : canEdit ? (
-            <form onSubmit={savePurchaseTax} className="form-grid section-gap">
-              <div className="field">
-                <label htmlFor="company-purchase-tax">Material purchase tax percent</label>
-                <input
-                  id="company-purchase-tax"
-                  inputMode="decimal"
-                  autoComplete="off"
-                  value={purchaseTaxInput}
-                  onChange={(event) => setPurchaseTaxInput(event.target.value)}
-                />
-              </div>
-              <div className="action-row">
-                <Button type="submit" variant="primary" disabled={pageBusy}>
-                  {pageBusy ? "Saving..." : "Save material purchase tax"}
-                </Button>
-              </div>
-            </form>
-          ) : catalog.companyPurchaseTax ? (
-            <p className="section-gap">
-              Material purchase tax: {readablePercent(catalog.companyPurchaseTax)}{" "}
-              <span className="small">exact {catalog.companyPurchaseTax}</span>
-            </p>
-          ) : (
-            <Notice>Material purchase tax was not returned. Retry after the database update is in place.</Notice>
-          )}
-        </Card>
       )}
 
       {canEdit && catalog && (
@@ -623,6 +547,16 @@ function PriceBookScreen({
           <option value="archived">Archived</option>
           <option value="all">Active and archived</option>
         </FilterSelect>
+        {canManageSettings && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="price-book-settings-button"
+            onClick={() => setSettingsOpen(true)}
+          >
+            Pricing settings
+          </Button>
+        )}
         {canEdit && !hidePrices && (
           <Button variant="primary" disabled={pageBusy} onClick={() => setEditor("new")}>
             New entry
@@ -673,9 +607,6 @@ function PriceBookScreen({
             supplierName={entry.supplier_id ? suppliersById.get(entry.supplier_id)?.name ?? "Supplier" : null}
             identifiers={identifiersByEntry.get(entry.id) ?? []}
             price={prices[entry.id]}
-            companyMargin={hidePrices ? null : catalog?.companyMargin ?? null}
-            companyPurchaseTax={hidePrices ? null : catalog?.companyPurchaseTax ?? null}
-            purchaseTaxAvailable={catalog?.purchaseTaxAvailable === true}
             hidePrices={hidePrices}
             canEdit={canEdit}
             pageBusy={pageBusy}
@@ -705,8 +636,8 @@ function PriceBookScreen({
           entry={editor === "new" ? null : editingEntry}
           identifiers={editor === "new" || !editingEntry ? [] : identifiersByEntry.get(editingEntry.id) ?? []}
           suppliers={catalog.suppliers}
-          companyMargin={catalog.companyMargin}
-          companyPurchaseTax={catalog.companyPurchaseTax}
+          companyMargin={canManageSettings ? catalog.companyMargin : null}
+          companyPurchaseTax={canManageSettings ? catalog.companyPurchaseTax : null}
           purchaseTaxAvailable={catalog.purchaseTaxAvailable}
           onClose={() => setEditor(null)}
           onMaterialSaved={() => {
@@ -719,6 +650,22 @@ function PriceBookScreen({
             setActionError("The signed-in account changed. Refresh the price book before saving again.")
             void load()
           }}
+        />
+      )}
+
+      {settingsOpen && canManageSettings && (
+        <PricingSettingsDialog
+          hidePrices={hidePrices}
+          pageBusy={pageBusy}
+          settingsPresent={catalog?.settingsPresent === true}
+          purchaseTaxAvailable={catalog?.purchaseTaxAvailable === true}
+          marginInput={marginInput}
+          purchaseTaxInput={purchaseTaxInput}
+          onMarginInput={setMarginInput}
+          onPurchaseTaxInput={setPurchaseTaxInput}
+          onSaveMargin={saveMargin}
+          onSavePurchaseTax={savePurchaseTax}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
 
@@ -808,9 +755,6 @@ function EntryCard({
   supplierName,
   identifiers,
   price,
-  companyMargin,
-  companyPurchaseTax,
-  purchaseTaxAvailable,
   hidePrices,
   canEdit,
   pageBusy,
@@ -828,9 +772,6 @@ function EntryCard({
   supplierName: string | null
   identifiers: PriceBookCatalog["identifiers"]
   price: MaterialPrice | undefined
-  companyMargin: string | null
-  companyPurchaseTax: string | null
-  purchaseTaxAvailable: boolean
   hidePrices: boolean
   canEdit: boolean
   pageBusy: boolean
@@ -879,15 +820,7 @@ function EntryCard({
         </p>
       )}
       {showMoney ? (
-        <SellingPrice
-          entry={entry}
-          price={price}
-          companyMargin={companyMargin}
-          companyPurchaseTax={companyPurchaseTax}
-          purchaseTaxAvailable={purchaseTaxAvailable}
-          accountId={accountId}
-          onRetry={onRetryPrice}
-        />
+        <SellingPrice entry={entry} price={price} accountId={accountId} onRetry={onRetryPrice} />
       ) : (
         <p className="subtext">Prices hidden</p>
       )}
@@ -925,49 +858,17 @@ function EntryCard({
   )
 }
 
-function DetailAmount({ label, value }: { label: string; value: string }) {
-  return (
-    <p className="subtext">
-      {label}: {readableMoney(value)} <span className="small">exact {value}</span>
-    </p>
-  )
-}
-
-function GrossMarginDetail({
-  entry,
-  companyMargin,
-}: {
-  entry: PriceBookEntry
-  companyMargin: string | null
-}) {
-  return <p className="subtext">{grossMarginDetailLine(entry.gross_margin_percent_override, companyMargin)}</p>
-}
-
-function MaterialBreakdown({
-  calculation,
-  entry,
-  companyMargin,
-}: {
-  calculation: MaterialCalculation
-  entry: PriceBookEntry
-  companyMargin: string | null
-}) {
+function MaterialCalculationRows({ calculation }: { calculation: MaterialCalculation }) {
   return (
     <>
-      <DetailAmount label="Pretax supplier cost per pricing unit" value={calculation.pretaxCostPerPricingUnit} />
+      <p className="subtext">Item cost before tax: {readableMoneyCents(calculation.pretaxCostPerPricingUnit)}</p>
       <p className="subtext">
-        Material purchase tax: {readablePercent(calculation.purchaseTaxPercent)} (
-        {readableMoney(calculation.purchaseTaxAmount)}){" "}
-        <span className="small">
-          exact rate {calculation.purchaseTaxPercent}; exact amount {calculation.purchaseTaxAmount}
-        </span>
+        Purchase tax ({readablePercent(calculation.purchaseTaxPercent)}): {readableMoneyCents(calculation.purchaseTaxAmount)}
       </p>
-      <GrossMarginDetail entry={entry} companyMargin={companyMargin} />
-      <DetailAmount label="Tax-inclusive cost per pricing unit" value={calculation.taxInclusiveCostPerPricingUnit} />
-      <DetailAmount label="Gross profit" value={calculation.grossProfitAmount} />
-      <p className="subtext">Gross profit is the unit selling price minus the tax-inclusive cost, rounded to cents.</p>
-      <DetailAmount label="Final unit selling price" value={calculation.unitSellingPrice} />
-      <DetailAmount label="One unit line total" value={calculation.oneUnitLineTotal} />
+      <p className="subtext">
+        Margin ({readablePercent(calculation.effectiveGrossMarginPercent)}): {readableMoneyCents(calculation.grossProfitAmount)}
+      </p>
+      <p className="subtext">Sale price: {readableMoneyCents(calculation.oneUnitLineTotal)}</p>
     </>
   )
 }
@@ -975,17 +876,11 @@ function MaterialBreakdown({
 function SellingPrice({
   entry,
   price,
-  companyMargin,
-  companyPurchaseTax,
-  purchaseTaxAvailable,
   accountId,
   onRetry,
 }: {
   entry: PriceBookEntry
   price: MaterialPrice | undefined
-  companyMargin: string | null
-  companyPurchaseTax: string | null
-  purchaseTaxAvailable: boolean
   accountId: string
   onRetry: () => void
 }) {
@@ -1016,14 +911,10 @@ function SellingPrice({
     )
   }
 
-  const marginText =
-    entry.gross_margin_percent_override != null
-      ? `Item margin ${readablePercent(entry.gross_margin_percent_override)}`
-      : `Uses company default${companyMargin ? ` (${readablePercent(companyMargin)})` : ""}`
+  const salePrice = price?.status === "ready" ? price.calculation?.oneUnitLineTotal ?? price.exact : null
 
   return (
     <>
-      <p className="subtext">{marginText}</p>
       {(!price || price.status === "loading") && <p className="subtext">Calculating selling price...</p>}
       {price?.status === "error" && (
         <div>
@@ -1035,42 +926,110 @@ function SellingPrice({
       )}
       {price?.status === "ready" && (
         <>
-          <p>
-            Selling price: {readableMoney(price.exact)} <span className="small">exact {price.exact}</span>
-          </p>
+          <p>Selling price: {readableMoneyCents(salePrice)}</p>
           <details className="price-book-details">
             <summary>Calculation details</summary>
-            <p className="subtext">{materialCalculationDetail(purchaseTaxAvailable, companyPurchaseTax)}</p>
             {price.calculation ? (
-              <MaterialBreakdown calculation={price.calculation} entry={entry} companyMargin={companyMargin} />
+              <MaterialCalculationRows calculation={price.calculation} />
             ) : (
-              <>
-                <Notice>{price.calculationMessage || MATERIAL_CALCULATION_UNAVAILABLE}</Notice>
-                {purchaseTaxAvailable && companyPurchaseTax ? (
-                  <p className="subtext">
-                    Material purchase tax: {readablePercent(companyPurchaseTax)}{" "}
-                    <span className="small">exact {companyPurchaseTax}</span>
-                  </p>
-                ) : null}
-                <GrossMarginDetail entry={entry} companyMargin={companyMargin} />
-              </>
+              <p className="subtext">{price.calculationMessage || MATERIAL_CALCULATION_UNAVAILABLE}</p>
             )}
-            <p className="subtext">
-              Supplier purchase cost excluding purchase tax: {readableMoney(entry.purchase_cost)} (exact{" "}
-              {entry.purchase_cost ?? "—"})
-            </p>
-            <p className="subtext">
-              Price basis: {unitLabel(entry.price_basis)}. Pricing unit: {unitLabel(entry.pricing_unit)}.
-              {entry.coverage_quantity
-                ? ` Coverage ${readableDecimal(entry.coverage_quantity)} ${unitLabel(entry.coverage_unit)}.`
-                : ""}
-              {entry.price_conversion_confirmed ? " Unit conversion confirmed." : ""}
-            </p>
-            <SampleLine accountId={accountId} entryId={entry.id} kind="material" unitPrice={price.exact} />
           </details>
         </>
       )}
     </>
+  )
+}
+
+function PricingSettingsDialog({
+  hidePrices,
+  pageBusy,
+  settingsPresent,
+  purchaseTaxAvailable,
+  marginInput,
+  purchaseTaxInput,
+  onMarginInput,
+  onPurchaseTaxInput,
+  onSaveMargin,
+  onSavePurchaseTax,
+  onClose,
+}: {
+  hidePrices: boolean
+  pageBusy: boolean
+  settingsPresent: boolean
+  purchaseTaxAvailable: boolean
+  marginInput: string
+  purchaseTaxInput: string
+  onMarginInput: (value: string) => void
+  onPurchaseTaxInput: (value: string) => void
+  onSaveMargin: (event: FormEvent<HTMLFormElement>) => void
+  onSavePurchaseTax: (event: FormEvent<HTMLFormElement>) => void
+  onClose: () => void
+}) {
+  return (
+    <ModalShell
+      ariaLabel="Pricing settings"
+      panelClassName="modal-panel modal-panel-price-book"
+      onEscape={onClose}
+      onOverlayClick={onClose}
+      dismissDisabled={pageBusy}
+    >
+      <div className="modal-header">
+        <h2>Pricing settings</h2>
+        <p className="subtext">Company gross margin and material purchase tax. Item margins stay on each material.</p>
+      </div>
+      {hidePrices ? (
+        <p className="subtext">Pricing settings are hidden while Hide Prices is on.</p>
+      ) : !settingsPresent ? (
+        <Notice>Company pricing settings are not available. Retry after the price book settings are in place.</Notice>
+      ) : (
+        <>
+          <form onSubmit={onSaveMargin} className="form-grid">
+            <div className="field">
+              <label htmlFor="company-margin">Default gross margin percent</label>
+              <input
+                id="company-margin"
+                inputMode="decimal"
+                autoComplete="off"
+                value={marginInput}
+                onChange={(event) => onMarginInput(event.target.value)}
+              />
+            </div>
+            <div className="action-row">
+              <Button type="submit" variant="primary" size="sm" disabled={pageBusy}>
+                {pageBusy ? "Saving..." : "Save margin"}
+              </Button>
+            </div>
+          </form>
+          {purchaseTaxAvailable ? (
+            <form onSubmit={onSavePurchaseTax} className="form-grid section-gap">
+              <div className="field">
+                <label htmlFor="company-purchase-tax">Material purchase tax percent</label>
+                <input
+                  id="company-purchase-tax"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  value={purchaseTaxInput}
+                  onChange={(event) => onPurchaseTaxInput(event.target.value)}
+                />
+              </div>
+              <div className="action-row">
+                <Button type="submit" variant="primary" size="sm" disabled={pageBusy}>
+                  {pageBusy ? "Saving..." : "Save purchase tax"}
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <Notice>{PURCHASE_TAX_UNAVAILABLE}</Notice>
+          )}
+        </>
+      )}
+      <div className="modal-actions">
+        <Button variant="secondary" size="sm" onClick={onClose} disabled={pageBusy}>
+          Close
+        </Button>
+      </div>
+    </ModalShell>
   )
 }
 

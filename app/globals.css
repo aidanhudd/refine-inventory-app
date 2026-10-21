@@ -2213,6 +2213,7 @@ button:focus-visible {
 .price-book-filters { align-items: end; }
 .price-book-filters .field { flex: 1 1 160px; min-width: min(100%, 140px); }
 .price-book-filters .field-grow { flex: 1 1 240px; }
+.price-book-settings-button { align-self: end; flex: 0 0 auto; }
 .price-book-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .price-book-choice { display: flex; flex-wrap: wrap; gap: 12px 18px; }
 .price-book-choice label { display: inline-flex; align-items: center; gap: 8px; }
@@ -2235,7 +2236,8 @@ button:focus-visible {
 .price-book-pager .subtext { margin: 0; }
 @media (max-width: 560px) {
   .price-book-filters .field,
-  .price-book-filters .field-grow { flex-basis: 100%; }
+  .price-book-filters .field-grow,
+  .price-book-filters .price-book-settings-button { flex-basis: 100%; width: 100%; }
 }
 
 /*
