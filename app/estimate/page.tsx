@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
 import { supabase } from "../../lib/supabaseClient"
 import { useHidePrices } from "../components/HidePricesProvider"
 import { Button, Card, Notice, PageHeader } from "../components/ui"
@@ -107,6 +108,17 @@ export default function EstimatePage() {
         title="Estimate Builder"
         description={`Build a quick material estimate${hidePrices ? "" : " and total"} before creating the final proposal.`}
       />
+
+      <Card className="section-gap">
+        <div className="action-row" style={{ marginTop: 0 }}>
+          <Link href="/estimate/price-book" className="nav-link">
+            Price book
+          </Link>
+        </div>
+        <p className="subtext">
+          Browse material, demolition, and installation prices. The scratchpad on this page stays here and is not saved.
+        </p>
+      </Card>
 
       <Card className="form-grid">
         <div className="field">

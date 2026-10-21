@@ -2209,6 +2209,33 @@ button:focus-visible {
   .category-expanded-photo { position: static; }
 }
 
+.price-book-page { display: grid; gap: 20px; }
+.price-book-filters { align-items: end; }
+.price-book-filters .field { flex: 1 1 160px; min-width: min(100%, 140px); }
+.price-book-filters .field-grow { flex: 1 1 240px; }
+.price-book-meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.price-book-choice { display: flex; flex-wrap: wrap; gap: 12px 18px; }
+.price-book-choice label { display: inline-flex; align-items: center; gap: 8px; }
+.price-book-choice input[type="radio"] { width: auto; }
+.price-book-details { margin-top: 8px; }
+.price-book-details summary { cursor: pointer; font-weight: 600; }
+.modal-panel.modal-panel-price-book {
+  max-width: 720px;
+  max-height: min(92vh, 920px);
+  overflow: auto;
+}
+.modal-panel-price-book .modal-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--card);
+  padding-bottom: 8px;
+}
+.price-book-page button:disabled { opacity: 0.6; cursor: default; transform: none; }
+@media (max-width: 560px) {
+  .price-book-filters .field,
+  .price-book-filters .field-grow { flex-basis: 100%; }
+}
+
 /*
  * Appearance presets (P3-2A correction).
  * Selectors work on the real html root and future [data-appearance-scope] containers.
