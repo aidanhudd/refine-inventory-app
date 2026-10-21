@@ -19,7 +19,11 @@ import { readHidePricesPreference } from "../../../lib/hidePrices"
 import { hasAppAccess, isManagerOrAdmin } from "../../../lib/profiles"
 import {
   entryTypeLabel,
+  filterPriceBookEntries,
   identifierKindLabel,
+  materialsForSellingPrices,
+  pagePriceBookEntries,
+  PRICE_BOOK_DISPLAY_PAGE_SIZE,
   priceBookErrorMessage,
   readableDecimal,
   readableMoney,
@@ -99,6 +103,7 @@ function PriceBookScreen({
   const [categoryFilter, setCategoryFilter] = useState("all")
   const [supplierFilter, setSupplierFilter] = useState("all")
   const [statusFilter, setStatusFilter] = useState("active")
+  const [listPage, setListPage] = useState(0)
   const [editor, setEditor] = useState<PriceBookEntry | "new" | null>(null)
   const [historyId, setHistoryId] = useState<string | null>(null)
   const [supplierDraft, setSupplierDraft] = useState<SupplierDraft | null>(null)
@@ -110,24 +115,26 @@ function PriceBookScreen({
     setCatalogState(next)
   }, [])
 
+  const priceGen = useRef(0)
+
   const fillPrices = useCallback(
     async (entries: PriceBookEntry[], session: AccountSession, gen: number) => {
-      const materials = entries.filter((entry) => entry.entry_type === "material")
+      const materials = materialsForSellingPrices(entries)
       setPrices(Object.fromEntries(materials.map((entry) => [entry.id, { status: "loading" }])))
       let index = 0
       const worker = async () => {
         while (index < materials.length) {
           const entry = materials[index]
           index += 1
-          if (gen !== loadGen.current || readHidePricesPreference()) return
+          if (gen !== priceGen.current || readHidePricesPreference()) return
           try {
             const exact = await materialUnitSellingPrice(session, entry.id)
-            if (gen !== loadGen.current || readHidePricesPreference()) return
+            if (gen !== priceGen.current || readHidePricesPreference()) return
             if (!(await accountStill(accountId))) return
-            if (gen !== loadGen.current || readHidePricesPreference()) return
+            if (gen !== priceGen.current || readHidePricesPreference()) return
             setPrices((current) => ({ ...current, [entry.id]: { status: "ready", exact } }))
           } catch (error) {
-            if (gen !== loadGen.current || readHidePricesPreference()) return
+            if (gen !== priceGen.current || readHidePricesPreference()) return
             setPrices((current) => ({
               ...current,
               [entry.id]: { status: "error", message: priceBookErrorMessage(error) },
@@ -163,15 +170,14 @@ function PriceBookScreen({
       const stillShowMoney = !hidePrices && !readHidePricesPreference()
       setCatalog(stillShowMoney ? next : stripCatalogMoney(next))
       setLoadError("")
-      if (stillShowMoney) void fillPrices(next.entries, session, gen)
-      else setPrices({})
+      if (!stillShowMoney) setPrices({})
     } catch (error) {
       if (!mounted.current || gen !== loadGen.current) return
       setLoadError(priceBookErrorMessage(error))
     } finally {
       if (mounted.current && gen === loadGen.current) setLoading(false)
     }
-  }, [accountId, fillPrices, hidePrices, setCatalog])
+  }, [accountId, hidePrices, setCatalog])
 
   useEffect(() => {
     mounted.current = true
@@ -219,22 +225,52 @@ function PriceBookScreen({
     return [...names].sort((left, right) => left.localeCompare(right))
   }, [catalog?.entries])
 
-  const visibleEntries = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    return (catalog?.entries ?? []).filter((entry) => {
-      if (typeFilter !== "all" && entry.entry_type !== typeFilter) return false
-      if (statusFilter !== "all" && entry.status !== statusFilter) return false
-      if (categoryFilter === "none" && entry.category) return false
-      if (categoryFilter !== "all" && categoryFilter !== "none" && entry.category !== categoryFilter) return false
-      if (supplierFilter === "none" && entry.supplier_id) return false
-      if (supplierFilter !== "all" && supplierFilter !== "none" && entry.supplier_id !== supplierFilter) return false
-      if (!query) return true
-      if (entry.name.toLowerCase().includes(query)) return true
-      return (identifiersByEntry.get(entry.id) ?? []).some((identifier) =>
-        identifier.code.toLowerCase().includes(query),
-      )
-    })
-  }, [catalog?.entries, categoryFilter, identifiersByEntry, search, statusFilter, supplierFilter, typeFilter])
+  const visibleEntries = useMemo(
+    () =>
+      filterPriceBookEntries(catalog?.entries ?? [], catalog?.identifiers ?? [], {
+        search,
+        entryType: typeFilter,
+        category: categoryFilter,
+        supplierId: supplierFilter,
+        status: statusFilter,
+      }),
+    [catalog?.entries, catalog?.identifiers, categoryFilter, search, statusFilter, supplierFilter, typeFilter],
+  )
+  const pagedEntries = useMemo(
+    () => pagePriceBookEntries(visibleEntries, listPage, PRICE_BOOK_DISPLAY_PAGE_SIZE),
+    [listPage, visibleEntries],
+  )
+  const displayedIds = pagedEntries.items.map((entry) => entry.id).join("\n")
+
+  useEffect(() => {
+    setListPage(0)
+  }, [search, typeFilter, categoryFilter, supplierFilter, statusFilter])
+
+  useEffect(() => {
+    if (listPage !== pagedEntries.pageIndex) setListPage(pagedEntries.pageIndex)
+  }, [listPage, pagedEntries.pageIndex])
+
+  useEffect(() => {
+    const gen = ++priceGen.current
+    if (hidePrices || readHidePricesPreference()) {
+      setPrices({})
+      return
+    }
+    const displayed = new Set(displayedIds ? displayedIds.split("\n") : [])
+    const materials = materialsForSellingPrices((catalog?.entries ?? []).filter((entry) => displayed.has(entry.id)))
+    if (materials.length === 0) {
+      setPrices({})
+      return
+    }
+    void (async () => {
+      const session = await readAccountSession()
+      if (gen !== priceGen.current || !session || session.userId !== accountId) return
+      await fillPrices(materials, session, gen)
+    })()
+    return () => {
+      priceGen.current += 1
+    }
+  }, [accountId, catalog, displayedIds, fillPrices, hidePrices])
 
   async function runPage(task: (session: AccountSession) => Promise<void>) {
     if (pageBusyRef.current) return
@@ -535,8 +571,36 @@ function PriceBookScreen({
         </EmptyState>
       )}
 
+      {catalog && visibleEntries.length > 0 && (
+        <div className="action-row price-book-pager">
+          <p className="subtext">
+            {pagedEntries.from}–{pagedEntries.to} of {pagedEntries.total}
+          </p>
+          {pagedEntries.pageCount > 1 && (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={pagedEntries.pageIndex === 0}
+                onClick={() => setListPage(pagedEntries.pageIndex - 1)}
+              >
+                Previous
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={pagedEntries.pageIndex >= pagedEntries.pageCount - 1}
+                onClick={() => setListPage(pagedEntries.pageIndex + 1)}
+              >
+                Next
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="list">
-        {visibleEntries.map((entry) => (
+        {pagedEntries.items.map((entry) => (
           <EntryCard
             key={entry.id}
             entry={entry}

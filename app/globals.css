@@ -2231,6 +2231,8 @@ button:focus-visible {
   padding-bottom: 8px;
 }
 .price-book-page button:disabled { opacity: 0.6; cursor: default; transform: none; }
+.price-book-pager { align-items: center; }
+.price-book-pager .subtext { margin: 0; }
 @media (max-width: 560px) {
   .price-book-filters .field,
   .price-book-filters .field-grow { flex-basis: 100%; }

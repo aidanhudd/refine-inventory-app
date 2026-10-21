@@ -463,6 +463,61 @@ export function readJsonTextField(json: string, key: string): string | null | un
   return raw
 }
 
+export const PRICE_BOOK_DISPLAY_PAGE_SIZE = 40
+
+export type PriceBookListFilters = {
+  search: string
+  entryType: string
+  category: string
+  supplierId: string
+  status: string
+}
+
+export function filterPriceBookEntries(
+  entries: PriceBookEntry[],
+  identifiers: SupplierIdentifier[],
+  filters: PriceBookListFilters,
+): PriceBookEntry[] {
+  const query = filters.search.trim().toLowerCase()
+  const codesByEntry = new Map<string, string[]>()
+  for (const identifier of identifiers) {
+    const codes = codesByEntry.get(identifier.entry_id) ?? []
+    codes.push(identifier.code.toLowerCase())
+    codesByEntry.set(identifier.entry_id, codes)
+  }
+  return entries.filter((entry) => {
+    if (filters.entryType !== "all" && entry.entry_type !== filters.entryType) return false
+    if (filters.status !== "all" && entry.status !== filters.status) return false
+    if (filters.category === "none" && entry.category) return false
+    if (filters.category !== "all" && filters.category !== "none" && entry.category !== filters.category) return false
+    if (filters.supplierId === "none" && entry.supplier_id) return false
+    if (filters.supplierId !== "all" && filters.supplierId !== "none" && entry.supplier_id !== filters.supplierId) {
+      return false
+    }
+    if (!query) return true
+    if (entry.name.toLowerCase().includes(query)) return true
+    return (codesByEntry.get(entry.id) ?? []).some((code) => code.includes(query))
+  })
+}
+
+export function pagePriceBookEntries<T>(items: T[], pageIndex: number, pageSize: number) {
+  const pageCount = items.length === 0 ? 1 : Math.ceil(items.length / pageSize)
+  const safeIndex = Math.min(Math.max(0, pageIndex), pageCount - 1)
+  const start = safeIndex * pageSize
+  return {
+    items: items.slice(start, start + pageSize),
+    pageIndex: safeIndex,
+    pageCount,
+    from: items.length === 0 ? 0 : start + 1,
+    to: Math.min(start + pageSize, items.length),
+    total: items.length,
+  }
+}
+
+export function materialsForSellingPrices(entries: PriceBookEntry[]): PriceBookEntry[] {
+  return entries.filter((entry) => entry.entry_type === "material")
+}
+
 export function redactAuditMoney(json: string | null): string | null {
   if (!json) return null
   const pattern = new RegExp(

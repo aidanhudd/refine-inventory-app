@@ -163,6 +163,102 @@ async function readRows(
   return asRows(parseJson(await requestText(session, pathAndQuery)))
 }
 
+/** Rows requested per catalog request. The server may return fewer; paging follows Content-Range. */
+export const PRICE_BOOK_FETCH_PAGE_SIZE = 200
+
+export type PriceBookContentRange = {
+  start: number | null
+  end: number | null
+  total: number | null
+}
+
+export function parseContentRange(header: string | null): PriceBookContentRange {
+  if (!header) return { start: null, end: null, total: null }
+  const match = /^(?:\*|(\d+)-(\d+))\/(\*|\d+)$/.exec(header.trim())
+  if (!match) return { start: null, end: null, total: null }
+  return {
+    start: match[1] == null ? null : Number(match[1]),
+    end: match[2] == null ? null : Number(match[2]),
+    total: match[3] === "*" ? null : Number(match[3]),
+  }
+}
+
+const INCOMPLETE_PAGE = "The price book did not confirm that every row was received."
+
+export async function collectPagedRows<T>(
+  pageSize: number,
+  readPage: (from: number, to: number) => Promise<{ rows: T[]; contentRange: string | null; status: number }>,
+): Promise<T[]> {
+  if (!Number.isInteger(pageSize) || pageSize < 1) {
+    throw new Error("The price book page size is invalid.")
+  }
+  const collected: T[] = []
+  let from = 0
+  for (let attempt = 0; attempt < 10000; attempt += 1) {
+    const page = await readPage(from, from + pageSize - 1)
+    if (page.status === 416) {
+      const range = parseContentRange(page.contentRange)
+      if (range.total == null || collected.length !== range.total) throw new Error(INCOMPLETE_PAGE)
+      return collected
+    }
+    if (page.status !== 200 && page.status !== 206) {
+      throw new Error(page.rows.length ? INCOMPLETE_PAGE : "The price book request failed.")
+    }
+    const range = parseContentRange(page.contentRange)
+    if (range.total == null) throw new Error(INCOMPLETE_PAGE)
+    if (range.total === 0) {
+      if (page.rows.length !== 0 || collected.length !== 0) throw new Error(INCOMPLETE_PAGE)
+      return []
+    }
+    if (range.start == null || range.end == null) throw new Error(INCOMPLETE_PAGE)
+    if (range.start !== from) throw new Error(INCOMPLETE_PAGE)
+    if (page.rows.length !== range.end - range.start + 1) throw new Error(INCOMPLETE_PAGE)
+    collected.push(...page.rows)
+    if (collected.length === range.total) return collected
+    if (collected.length > range.total) throw new Error(INCOMPLETE_PAGE)
+    const nextFrom = range.end + 1
+    if (nextFrom <= from) throw new Error(INCOMPLETE_PAGE)
+    from = nextFrom
+  }
+  throw new Error(INCOMPLETE_PAGE)
+}
+
+async function readAllRows(
+  session: AccountSession,
+  path: string,
+  params: Record<string, string>,
+  order: string,
+): Promise<Record<string, unknown>[]> {
+  const rows = await collectPagedRows(PRICE_BOOK_FETCH_PAGE_SIZE, async (from, to) => {
+    const response = await fetch(`${supabaseUrl}/rest/v1/${query(path, { ...params, order })}`, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        ...authHeaders(session, false),
+        Range: `${from}-${to}`,
+        "Range-Unit": "items",
+        Prefer: "count=exact",
+      },
+    })
+    const text = await response.text()
+    if (response.status !== 200 && response.status !== 206 && response.status !== 416) {
+      throw new Error(messageFromBody(text, response.status))
+    }
+    return {
+      rows: response.status === 416 ? [] : asRows(parseJson(text)),
+      contentRange: response.headers.get("content-range"),
+      status: response.status,
+    }
+  })
+  const ids = new Set<string>()
+  for (const row of rows) {
+    const id = row.id
+    if (typeof id !== "string" || !id || ids.has(id)) throw new Error(INCOMPLETE_PAGE)
+    ids.add(id)
+  }
+  return rows
+}
+
 function query(path: string, params: Record<string, string>): string {
   const search = Object.entries(params)
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
@@ -248,15 +344,19 @@ export function stripCatalogMoney(catalog: PriceBookCatalog): PriceBookCatalog {
 
 export async function loadPriceBook(session: AccountSession, includeMoney: boolean): Promise<PriceBookCatalog> {
   const [entryRows, identifierRows, supplierRows, settingRows] = await Promise.all([
-    readRows(session, query("price_book_entries", { select: entrySelect(includeMoney), order: "name.asc" })),
-    readRows(
+    readAllRows(
       session,
-      query("price_book_supplier_identifiers", {
-        select: "id,entry_id,supplier_id,kind,code",
-        order: "code.asc",
-      }),
+      "price_book_entries",
+      { select: entrySelect(includeMoney) },
+      "name.asc,id.asc",
     ),
-    readRows(session, query("price_book_suppliers", { select: "id,name,notes,status", order: "name.asc" })),
+    readAllRows(
+      session,
+      "price_book_supplier_identifiers",
+      { select: "id,entry_id,supplier_id,kind,code" },
+      "entry_id.asc,id.asc",
+    ),
+    readAllRows(session, "price_book_suppliers", { select: "id,name,notes,status" }, "name.asc,id.asc"),
     readRows(
       session,
       query("price_book_settings", {
