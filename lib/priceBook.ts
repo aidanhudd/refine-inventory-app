@@ -222,7 +222,14 @@ export function priceBookErrorMessage(error: unknown): string {
   if (/does not exist|schema cache|PGRST205/i.test(raw)) {
     return "The price book is not available yet. Try again after the database update is in place."
   }
-  if (/permission denied/i.test(raw)) return "You do not have access to change the price book."
+  if (
+    /permission denied for function price_book_(validate_purchase_tax|company_default_purchase_tax|entry_unit_selling_price|entry_audit_json|estimate_material_snapshot|material_price_snapshot|material_unit_selling_price|material_line_total|material_pretax_cost_per_pricing_unit|material_price_parts)/i.test(
+      raw,
+    )
+  ) {
+    return "The selling price could not be read."
+  }
+  if (/permission denied/i.test(raw)) return "You do not have access to the price book."
   if (/JWT expired|invalid claim|not authenticated/i.test(raw)) return "Sign in again to use the price book."
   return raw.trim() || "The price book request failed."
 }
